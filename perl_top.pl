@@ -144,17 +144,17 @@
    if ( $use_opls == 1 )
    {
       die "Error: cannot find file ffoplsaanb.itp!\n"
-         unless (-e "ffoplsaanb.itp") ;
+         unless (-e "itp_files/ffoplsaanb.itp") ;
       die "Error: cannot find file ffoplsaabd.itp!\n"
-         unless (-e "ffoplsaabd.itp") ;
+         unless (-e "itp_files/ffoplsaabd.itp") ;
       printf "Force_Field   OPLS-AA\nffoplsaanb.itp\nffoplsaabd.itp\n";
    }
    if ( $use_amber03 == 1 )
    {
       die "Error: cannot find file ffamber03nb.itp!\n"
-         unless (-e "ffamber03nb.itp") ;
+         unless (-e "itp_files/ffamber03nb.itp") ;
       die "Error: cannot find file ffamber03bd.itp!\n"
-         unless (-e "ffamber03bd.itp") ;
+         unless (-e "itp_files/ffamber03bd.itp") ;
       printf "Force_Field   Amber03\nffamber03nb.itp\nffamber03bd.itp\n";
    }
    printf "\n";
@@ -347,7 +347,7 @@
 
                if ( $use_opls==1 )
                {
-                  open ITP,"ffoplsaanb.itp"
+                  open ITP,"itp_files/ffoplsaanb.itp"
                      or die "Error: cannot open itp file ffoplsaanb.itp !\n";
                   while ( <ITP> )
                   {
@@ -365,7 +365,7 @@
 
                if ( $use_amber03==1 )
                {
-                  open ITP,"ffamber03nb.itp"
+                  open ITP,"itp_files/ffamber03nb.itp"
                      or die "Error: cannot open itp file ffamber03nb.itp !\n";
                   while ( <ITP> )
                   {  
@@ -398,7 +398,7 @@
 #           change OPLS atomtype to bondtype
             if ( $use_opls==1 )
             {
-               open ITP,"ffoplsaanb.itp"
+               open ITP,"itp_files/ffoplsaanb.itp"
                   or die "Error: cannot open itp file ffoplsaanb.itp !\n";
                while ( <ITP> )
                {
@@ -517,12 +517,12 @@
              
                   if ( $use_opls==1 )
                   {
-                     open ITP,"ffoplsaabd.itp"
+                     open ITP,"itp_files/ffoplsaabd.itp"
                         or die "Error: cannot open itp file ffoplsaabd.itp !\n";
                   }
                   elsif ( $use_amber03==1 )
                   {
-                     open ITP,"ffamber03bd.itp"
+                     open ITP,"itp_files/ffamber03bd.itp"
                         or die "Error: cannot open itp file ffamber03bd.itp !\n";
                   }
                   else
@@ -662,12 +662,12 @@
 
                if ( $use_opls==1 )
                {
-                  open ITP,"ffoplsaabd.itp"
+                  open ITP,"itp_files/ffoplsaabd.itp"
                      or die "Error: cannot open itp file ffoplsaabd.itp !\n";
                }
                elsif ( $use_amber03==1 )
                {
-                  open ITP,"ffamber03bd.itp"
+                  open ITP,"itp_files/ffamber03bd.itp"
                      or die "Error: cannot open itp file ffamber03bd.itp !\n";
                }
                else
@@ -815,12 +815,12 @@
 
                if ( $use_opls==1 )
                {
-                  open ITP,"ffoplsaabd.itp"
+                  open ITP,"itp_files/ffoplsaabd.itp"
                      or die "Error: cannot open itp file ffoplsaabd.itp !\n";
                }
                elsif ( $use_amber03==1 )
                {
-                  open ITP,"ffamber03bd.itp"
+                  open ITP,"itp_files/ffamber03bd.itp"
                      or die "Error: cannot open itp file ffamber03bd.itp !\n";
                }
                else
@@ -900,7 +900,7 @@
 
                if ( $use_amber03==1 and $dihedral_found==0 )
                {
-                  open ITP,"ffamber03bd.itp"
+                  open ITP,"itp_files/ffamber03bd.itp"
                      or die "Error: cannot open itp file ffamber03bd.itp !\n";
                   while ( <ITP> )
                   {
