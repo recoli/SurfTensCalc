@@ -94,7 +94,7 @@
          printf ( "*           TheoChem & Biology, KTH, Stockholm, Sweden            *\n" );
          printf ( "*******************************************************************\n" );
          printf ( "\n" );
-         printf ( "                   Version 1.8.2, 2012-03-16                       \n" );
+         printf ( "                       Version 2012-03-16                          \n" );
          printf ( "\n" );
          printf ( "Note:\n" );
          printf ( "a) Please check that the droplet does not cross box boundary during\n" );
