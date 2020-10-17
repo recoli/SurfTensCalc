@@ -58,8 +58,15 @@
       nFrames = atoi(argv[1]);
       nStart = atoi(argv[2]);
 
+      if ( nFrames<=nStart ) 
+      {
+         printf( "Error: nFrames is no larger than nStart!\n" ) ;
+         exit(1);
+      }
+
       double temperature;
       temperature = atof(argv[3]); /* K */
+
 /*
  *    Constants    
  *
@@ -81,6 +88,18 @@
       const double fQQ  = 138.93545782935 ;    /* kJ mol^-1 nm e^-2 */
       const double pi   =   3.14159265358979323846 ;
       const double nA   =   6.02214129 ;  /* 10^23 mol^-1 */
+/*
+      int comb_rule;
+      double fudgeLJ, fudgeQQ;
+*/
+
+      int **atomtype, **residue;
+
+      int nLJCoefs, nTypes;
+      double **LJ_C6, **LJ_C12;
+      int iType, jType;
+      double c6, c12;
+
 /*
  *    work of formation
  */
@@ -119,13 +138,14 @@
  *    variables for pair force calculation   
  */
       int    i, j, inters, im, jm, iMin, iMax, jMin, jMax ;
-      double mi, qi, sigi, epsi, qj, sigj, epsj;
+      double mi, qi, qj ;
       double r, r2 ;
-      double cxi, cyi, czi, rci2, rci ;
-      double cxj, cyj, czj, rcj2, rcj ;
-      double cxij, cyij, czij, cij2, cij ; 
-      double rxij, ryij, rzij, rij2, rij ;
-      double sr2, sr6, sr12, ffij, fxij, fyij, fzij, fij ;
+      double chord2 ;
+      double cxi, cyi, czi, rci2, rci, rciInv ;
+      double cxj, cyj, czj, rcj2, rcj, rcjInv ;
+      double cxij, cyij, czij, cij2, cij, cijInv ; 
+      double rxij, ryij, rzij, rij2, rij, rijInv ;
+      double rij6, rij12, ffij, fxij, fyij, fzij, fij ;
 /*
  *    variables for interception calculation   
  */
@@ -171,15 +191,16 @@
       }
       mol = 0;
 /*
- *    read comments (two lines)
+ *    read comb_rule and fudgeLJ, fudgeQQ (first two lines)
  */
       fgets( line, sizeof( line ), file_par );
+/*
+      sscanf( line, "%s%d", tmp, &comb_rule );
+*/
       fgets( line, sizeof( line ), file_par );
-      if ( nFrames<=nStart ) 
-      {
-         printf( "Error: nFrames is no larger than nStart!\n" ) ;
-         exit(1);
-      }
+/*
+      sscanf( line, "%s%f%f", tmp, &fudgeLJ, &fudgeQQ );
+*/
 /*
  *    read name of xtc file
  */
@@ -187,6 +208,8 @@
       sscanf( line, "%s%s", tmp, filenameXTC );
 /*
  *    read number of molecules
+ *    atomNr: number of atoms in this type of molecule
+ *    molNr: number of this type of molecule in the system
  */
       fgets( line, sizeof( line ), file_par );
       sscanf( line, "%s%d", tmp, &molTypes );
@@ -204,6 +227,8 @@
       mass    = malloc(molTypes * sizeof(double *));
       sigma   = malloc(molTypes * sizeof(double *));
       epsilon = malloc(molTypes * sizeof(double *));
+      atomtype = malloc(molTypes * sizeof(int *));
+      residue  = malloc(molTypes * sizeof(int *));
       for ( mol=0; mol<molTypes; mol++ ) 
       {
          fgets( line, sizeof( line ), file_par );
@@ -212,12 +237,42 @@
          mass[mol]    = malloc(atomNr[mol] * sizeof(double));
          sigma[mol]   = malloc(atomNr[mol] * sizeof(double));
          epsilon[mol] = malloc(atomNr[mol] * sizeof(double));
+         atomtype[mol] = malloc(atomNr[mol] * sizeof(int));
+         residue[mol]  = malloc(atomNr[mol] * sizeof(int));
          for ( atom=0; atom<atomNr[mol]; atom++ ) 
          {
             fgets( line, sizeof( line ), file_par );
-            sscanf( line, "%lf%lf%lf%lf",
+            sscanf( line, "%lf%lf%lf%lf%d%d",
                     &charge[mol][atom], &mass[mol][atom],
-                    &sigma[mol][atom],  &epsilon[mol][atom] );
+                    &sigma[mol][atom],  &epsilon[mol][atom],
+                    &atomtype[mol][atom], &residue[mol][atom] );
+         }
+      }
+/*
+ *    read Lennard-Jones C6 and C12 coefficients
+ */
+      fgets( line, sizeof( line ), file_par );
+      sscanf( line, "%s%d%d", tmp, &nLJCoefs, &nTypes );
+      LJ_C6  = malloc(nTypes * sizeof(double *));
+      LJ_C12 = malloc(nTypes * sizeof(double *));
+      for ( iType=0; iType<nTypes; iType++ )
+      {
+         LJ_C6[iType]  = malloc(nTypes * sizeof(double));
+         LJ_C12[iType] = malloc(nTypes * sizeof(double));
+         for ( jType=iType; jType<nTypes; jType++ )
+         {
+            fgets( line, sizeof( line ), file_par );
+            sscanf( line, "%le%le", &LJ_C6[iType][jType], 
+                                    &LJ_C12[iType][jType] );
+         }
+      }
+
+      for ( iType=0; iType<nTypes-1; iType++ )
+      {
+         for ( jType=iType+1; jType<nTypes; jType++ )
+         {
+            LJ_C6[jType][iType] = LJ_C6[iType][jType];
+            LJ_C12[jType][iType] = LJ_C12[iType][jType];
          }
       }
 /*
@@ -503,13 +558,14 @@
             cz[im] /= msum;
             rci2 = cx[im]*cx[im] + cy[im]*cy[im] + cz[im]*cz[im];
             rci = sqrt( rci2 );
+
             bin = (int)( rci/dR );
             if ( bin < maxBin ) 
             {
 /*
  *             volume of the spherical layer 
  */
-               dV = pi*4.0/3.0*( pow((double)(bin+1)*dR,3) - pow((double)bin*dR,3) );
+               dV = pi*4.0/3.0*( pow((double)(bin+1)*dR,3.0) - pow((double)bin*dR,3.0) );
 /*
  *             add increment to dens[bin] and averDens[bin]
  */
@@ -592,42 +648,33 @@
                mol  = iMol[i];
                atom = iAtom[i];
                qi   =  charge[mol][atom];
-               sigi =   sigma[mol][atom];
-               epsi = epsilon[mol][atom];
+               iType = atomtype[mol][atom];
+
                mol  = iMol[j];
                atom = iAtom[j];
                qj   =  charge[mol][atom];
-               sigj =   sigma[mol][atom];
-               epsj = epsilon[mol][atom];
+               jType = atomtype[mol][atom];
+
+               c6   =   LJ_C6[iType][jType];
+               c12  =  LJ_C12[iType][jType];
 /*
- *             vdw forces, LJ potential ( sigma, epsilon )
+ *             VDW forces, LJ potential ( sigma, epsilon )
+ *
+ *             U = C12 / R^12 - C6 / R^6
+ *             F = 12 * C12 / R^13 - 6 * C6 / R^7
+ *             vecF = ( 12 * C12 / R^14 - 6 * C6 / R^8 ) * vecR
+ *                  = ( 2 * C12 / R^12 - C6 / R^6 ) * 6 / R^2 * vecR
+ *
  *             U = 4 * eps * ( sig^12/R^12 - sig^6/R^6 )
  *             F = 4 * eps * ( 12*sig^12/R^13 - 6*sig^6/R^7 )
  *             vecF = 4 * eps * ( 12*sig^12/R^14 - 6*sig^6/R^8 ) * vecR
  *                  = 24 * eps * ( 2*(sig/R)^12 - (sig/R)^6 ) / R^2 * vecR
- *
- *             OPLS combination rule:
- *             sig(ij) = sqrt( sig(i) * sig(j) )
- *             eps(ij) = sqrt( eps(i) * eps(j) )
  */
-               if ( epsi>0.0 && epsj>0.0 ) 
+               if ( c6!=0.0 && c12!=0.0 ) 
                {
-                  if ( epsi==epsj && sigi==sigj )
-                  {
-                     sr2  = sigi*sigi/rij2;
-                     sr6  = sr2 * sr2 * sr2;
-                     sr12 = sr6 * sr6;
-                     fij  = (sr12*2.0-sr6)/rij2;
-                     fij  = fij * epsi * 24.0;
-                  }
-                  else
-                  {
-                     sr2  = sigi*sigj/rij2;
-                     sr6  = sr2 * sr2 * sr2;
-                     sr12 = sr6 * sr6;
-                     fij  = (sr12*2.0-sr6)/rij2;
-                     fij  = fij * sqrt(epsi*epsj) * 24.0;
-                  }
+                  rij6 = rij2 * rij2 * rij2 ;
+                  rij12 = rij6 * rij6;
+                  fij = ( c12*2.0/rij12 - c6/rij6 ) * 6.0/rij2;
                   fxij = fxij + fij * rxij;
                   fyij = fyij + fij * ryij;
                   fzij = fzij + fij * rzij;
@@ -635,10 +682,14 @@
 /*
  *             Coulomb forces   
  */
-               fij  = fQQ * qi * qj / ( rij2 * rij );
-               fxij = fxij + fij * rxij;
-               fyij = fyij + fij * ryij;
-               fzij = fzij + fij * rzij;
+               if ( qi!=0.0 && qj!=0.0 )
+               {
+                  fij  = fQQ * qi * qj / ( rij2 * rij );
+            //      fij  = fQQ * qi * qj / rij2 * rijInv;
+                  fxij = fxij + fij * rxij;
+                  fyij = fyij + fij * ryij;
+                  fzij = fzij + fij * rzij;
+               }
 /*
  *          end of loops (i and j)   
  */
@@ -650,12 +701,14 @@
  *          ffij < 0 :  attractive force 
  */
             ffij = ( fxij*cxij + fyij*cyij + fzij*czij ) / cij;
+       //     ffij = ( fxij*cxij + fyij*cyij + fzij*czij ) * cijInv;
 
 /*
  *          determine rmin, rmax, bmin, bmax   
  */
             cos_i = (rci2+cij2-rcj2)/(rci*cij*2.0);
-            if ( cos_i<-1 || cos_i>1 ) 
+      //      cos_i = (rci2+cij2-rcj2) * rciInv * cijInv * 0.5f;
+            if ( fabs(cos_i)>1.0 ) 
             {
                printf ("Error: cos_i<-1 or cos_i>1!\ncos_i = %f\n",cos_i);
                printf ("rci = %f, cij = %f, rcj = %f\n",rci,cij,rcj);
@@ -702,7 +755,14 @@
                } 
                else if ( rci>=r && rcj>=r ) 
                {
-                  inters = 2;
+                  if ( h2==r2 )
+                  {
+                     inters = 1;
+                  }
+                  else
+                  {
+                     inters = 2;
+                  }
                } 
                else 
                {

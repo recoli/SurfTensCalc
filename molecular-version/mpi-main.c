@@ -85,15 +85,14 @@
          printf ( "*         TheoChem, KTH, Stockholm, Sweden          *\n" );
          printf ( "*****************************************************\n" );
 
-         printf ( "\n                     Version 1.3                     \n" );
+         printf ( "\n                     Version 1.4                     \n" );
 
          printf ( "\nNote:\n" );
          printf ( "a) This program assumes that the droplet is centered\n" );
          printf ( "   in the box during the simulation trajectory.\n" );
          printf ( "b) This program is valid only when the vapor pressure\n" );
          printf ( "   is very low.\n" );
-         printf ( "c) Currently only the OPLS force field is supported.\n" );
-         printf ( "d) All pairwise intermolecular forces within the box\n" );
+         printf ( "c) All pairwise intermolecular forces within the box\n" );
          printf ( "   are taken into account.\n" );
 
          printf ( "\nPlease cite the following papers:\n" );
@@ -150,12 +149,12 @@
                   delta_hour, delta_minute, delta_second );
       }
 
+/*
+ *    Commented; run ./serial_process_data.x manually
+
       if ( iproc == master )
       {
          printf ( "\nStep II: Processing data\n" );
-/*
- *       Run ./serial_process_data.x on master processor
- */ 
          sprintf ( command, "./serial_process_data.x %d > surftens.dat", numprocs );
          system ( command );
          system ( "cat surftens.dat" );
@@ -163,6 +162,8 @@
          printf ( "\nEnd of program\n" );
 
       }
+
+ */ 
 
       return 0;
 

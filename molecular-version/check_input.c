@@ -134,11 +134,20 @@
       sscanf( line, "%s%d", tmp, &molTypes );
       atomNr = malloc(molTypes * sizeof(int));
       molNr  = malloc(molTypes * sizeof(int));
+
+      printf ( "   There are %d types of molecules:\n", molTypes );
+      printf ( "   %-16s", "MoleculeName" );
+
       for ( mol=0; mol<molTypes; mol++ ) 
       {
          fgets( line, sizeof( line ), file_par );
          sscanf( line, "%s%d", tmp, &molNr[mol] );
+
+         printf ( "%8s", tmp );
+
       }
+
+      printf ( "\n" );
 /*
  *    read atomic information
  */
@@ -147,15 +156,10 @@
       sigma   = malloc(molTypes * sizeof(double *));
       epsilon = malloc(molTypes * sizeof(double *));
 
-      printf ( "   There are %d types of molecules:\n", molTypes );
-      printf ( "   %-16s", "MoleculeName" );
-
       for ( mol=0; mol<molTypes; mol++ ) 
       {
          fgets( line, sizeof( line ), file_par );
          sscanf( line, "%s%d", tmp, &atomNr[mol] );
-
-         printf ( "%8s", tmp );
 
          charge[mol]  = malloc(atomNr[mol] * sizeof(double));
          mass[mol]    = malloc(atomNr[mol] * sizeof(double));
@@ -169,8 +173,6 @@
                     &sigma[mol][atom],  &epsilon[mol][atom] );
          }
       }
-
-      printf ( "\n" );
 
 /*
  *    close param.txt
