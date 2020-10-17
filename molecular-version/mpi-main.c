@@ -79,10 +79,43 @@
  */
       if ( iproc == master )
       {
+         printf ( "*****************************************************\n" );
+         printf ( "*  C program to compute surface tension of droplet  *\n" );
+         printf ( "*                   by  Xin Li                      *\n" );
+         printf ( "*         TheoChem, KTH, Stockholm, Sweden          *\n" );
+         printf ( "*****************************************************\n" );
+
+         printf ( "\n                     Version 1.3                     \n" );
+
+         printf ( "\nNote:\n" );
+         printf ( "a) This program assumes that the droplet is centered\n" );
+         printf ( "   in the box during the simulation trajectory.\n" );
+         printf ( "b) This program is valid only when the vapor pressure\n" );
+         printf ( "   is very low.\n" );
+         printf ( "c) Currently only the OPLS force field is supported.\n" );
+         printf ( "d) All pairwise intermolecular forces within the box\n" );
+         printf ( "   are taken into account.\n" );
+
+         printf ( "\nPlease cite the following papers:\n" );
+         printf ( "1) Thompson, et al., J. Chem. Phys., 1984, 81, 530-542.\n" );
+         printf ( "2) Brodskaya, et al., J. Colloid Interface Sci., 1996,\n" );
+         printf ( "   180, 86-97.\n" );
+         printf ( "3) Li, et al., J. Phys. Chem. Lett. 2010, 1, 769-773.\n" );
+         printf ( "4) Li, et al., Atmos. Chem. Phys., 2011, 11, 519-527.\n" );
+
          start_t = time(NULL);
-         printf ( "\nPhase I: MPI execution\n" );
-         printf ( "\n  Number of processors: %d\n", numprocs );
-         printf ( "\n  Job started at %s", ctime(&start_t) );
+         printf ( "\nStep I: MPI execution\n" );
+         printf ( "   %d frames will be read from the trajectory file.\n", nFrames );
+         printf ( "   Only the last %d frames will be used in calculation.\n", nFrames-nStart );
+         printf ( "   The temperature is %8.2f K\n", temperature );
+         printf ( "<> Checking input files...\n" );
+
+         system ( "./check_input.x > check_input.log" );
+         system ( "cat check_input.log" );
+
+         printf ( "<> Job started at %s", ctime(&start_t) );
+         printf ( "   Number of processors: %d\n", numprocs );
+         printf ( "   Running serial_calc_pres_dens.x on each processor...\n" );
       }
 /*
  *    convert rank to filename
@@ -107,26 +140,28 @@
       if ( iproc == master )
       {
          end_t = time(NULL);
-         printf ( "\n  Job ended at %s", ctime(&end_t) );
-         printf ( "\n  The MPI program terminated normally.\n");    
+         printf ( "   Job ended at %s", ctime(&end_t) );
 
          delta_time = (int)(difftime(end_t,start_t));
          delta_hour = delta_time / 3600;
          delta_minute = (delta_time - delta_hour*3600) / 60;
          delta_second = delta_time - delta_hour*3600 - delta_minute*60;
-         printf ( "\n  The calculation used %d hours %d minutes %d seconds.\n", 
+         printf ( "   The calculation used %d hours %d minutes %d seconds.\n", 
                   delta_hour, delta_minute, delta_second );
       }
 
       if ( iproc == master )
       {
-         printf ( "\nPhase II: Processing data\n" );
+         printf ( "\nStep II: Processing data\n" );
 /*
  *       Run ./serial_process_data.x on master processor
  */ 
          sprintf ( command, "./serial_process_data.x %d > surftens.dat", numprocs );
          system ( command );
-         printf ( "\nDone!\n" );
+         system ( "cat surftens.dat" );
+
+         printf ( "\nEnd of program\n" );
+
       }
 
       return 0;

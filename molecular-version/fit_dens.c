@@ -47,7 +47,7 @@
       double *r, *dens, *dd;
       double dl, dg, integr, re;
 
-      FILE   *file_dat, *file_xvg, *file_result;
+      FILE   *file_dat, *file_xvg ;
       char   line[256];
  
       int    count;
@@ -95,10 +95,6 @@
       }
 
 /*
- *    open file for writing results
- */
-      file_result = fopen( "fit_result", "w" );
-/*
  *    read density profile   
  */ 
       for ( bin=0; bin<maxbin; bin++ ) 
@@ -107,10 +103,10 @@
          dens[bin] = 0.0;
       }
 
-      file_dat = fopen("pressure.dat","r") ;
+      file_dat = fopen("density.dat","r") ;
       if ( NULL==file_dat ) 
       {
-         printf( "Cannot open file: pressure.dat !\n" ) ;
+         printf( "Cannot open file: density.dat !\n" ) ;
          exit(1);
       }
       for ( bin=0; bin<maxbin; bin++ ) 
@@ -302,9 +298,9 @@
 /*
  *    write final results
  */
-      fprintf( file_result, "%20.10f  (%-s)\n", dl, "Liquid_Density" ) ;
-      fprintf( file_result, "%20.10f  (%-s)\n", dg, "Gas_Density" ) ;
-      fprintf( file_result, "%20.10f  (%-s)\n", re, "Re" ) ;
+      printf( "%20.10f  (%-s)\n", dl, "Liquid_Density, nm^-3" ) ;
+      printf( "%20.10f  (%-s)\n", dg, "Gas_Density, nm^-3" ) ;
+      printf( "%20.10f  (%-s)\n", re, "Re, nm" ) ;
 
 /*
  *    release arrays

@@ -171,12 +171,10 @@
       }
       mol = 0;
 /*
- *    read number of frames
+ *    read comments (two lines)
  */
       fgets( line, sizeof( line ), file_par );
-      /*sscanf( line, "%s%d", tmp, &nFrames );*/
       fgets( line, sizeof( line ), file_par );
-      /*sscanf( line, "%s%d", tmp, &nStart );*/
       if ( nFrames<=nStart ) 
       {
          printf( "Error: nFrames is no larger than nStart!\n" ) ;
@@ -614,11 +612,22 @@
  */
                if ( epsi>0.0 && epsj>0.0 ) 
                {
-                  sr2  = sigi*sigj/rij2;
-                  sr6  = sr2 * sr2 * sr2;
-                  sr12 = sr6 * sr6;
-                  fij  = (sr12*2.0-sr6)/rij2;
-                  fij  = fij * sqrt(epsi*epsj) * 24.0;
+                  if ( epsi==epsj && sigi==sigj )
+                  {
+                     sr2  = sigi*sigi/rij2;
+                     sr6  = sr2 * sr2 * sr2;
+                     sr12 = sr6 * sr6;
+                     fij  = (sr12*2.0-sr6)/rij2;
+                     fij  = fij * epsi * 24.0;
+                  }
+                  else
+                  {
+                     sr2  = sigi*sigj/rij2;
+                     sr6  = sr2 * sr2 * sr2;
+                     sr12 = sr6 * sr6;
+                     fij  = (sr12*2.0-sr6)/rij2;
+                     fij  = fij * sqrt(epsi*epsj) * 24.0;
+                  }
                   fxij = fxij + fij * rxij;
                   fyij = fyij + fij * ryij;
                   fzij = fzij + fij * rzij;
@@ -755,21 +764,22 @@
 /*
  *    write results
  */
-      printf ( "%s\n", "#Radius Density Pressure_U Pressure_N" );
+      printf ( "%s\n", "#Radius Pressure_K Pressure_U Pressure_N" );
       for ( bin=0; bin<maxBin; bin++ ) 
       {
          r = ( (double)(bin) + 0.5 ) * dR;
-         printf ( "%8.3f%20.10f%20.10f%20.10f\n", r, averDens[bin], averPU[bin],
+         printf ( "%8.3f%20.10f%20.10f%20.10f\n", r, 
+                  kB*nA*temperature*averDens[bin], averPU[bin],
                   kB*nA*temperature*averDens[bin] + averPU[bin] );
       }
 /*
  *    write molecular densities
  */
-      printf ( "%s\n", "#Radius Individual_density" );
+      printf ( "%s\n", "#Radius Total_Density Individual_Densities" );
       for ( bin=0; bin<maxBin; bin++ ) 
       {
          r = ( (double)(bin) + 0.5 ) * dR;
-         printf ( "%8.3f", r );
+         printf ( "%8.3f%20.10f", r, averDens[bin] );
          for ( mol=0; mol<molTypes; mol++ )
          {
             printf ( "%20.10f", molDens[bin][mol] );

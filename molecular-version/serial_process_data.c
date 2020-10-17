@@ -72,27 +72,28 @@
       FILE *file_data, *file_work, *file_pres, *file_dens;
       int read_text, read_data;
 
-      double r, dens, pU, pN;
-      double *aver_r, *aver_dens, *aver_pU, *aver_pN;
+      double r, pK, pU, pN;
+      double *aver_r, *aver_pK, *aver_pU, *aver_pN;
 
-      int mol, molTypes;
-      double *aver_molR, **aver_molDens;
+      int mol, dens, molTypes;
+      double *aver_molR, *aver_dens, **aver_molDens;
       char *tmp;
 
       char command[256];
-      FILE *file_fit;
-      double fit_dl, fit_dg, fit_re, calc_work, surf_tens;
+      FILE *file_fit_d;
+      double fit_dl, fit_dg, fit_re, calc_work, eff_surf_tens;
 /*
  *    set initial values and allocate arrays
  */
       molTypes = 20;
 
       aver_r = malloc( sizeof(double) * maxBin );
-      aver_dens = malloc( sizeof(double) * maxBin );
+      aver_pK = malloc( sizeof(double) * maxBin );
       aver_pU = malloc( sizeof(double) * maxBin );
       aver_pN = malloc( sizeof(double) * maxBin );
 
       aver_molR = malloc(maxBin * sizeof(double));
+      aver_dens = malloc( sizeof(double) * maxBin );
       aver_molDens = malloc(maxBin * sizeof(double *));
       for ( bin=0; bin<maxBin; bin++ ) 
       {
@@ -102,11 +103,12 @@
       for ( bin=0; bin<maxBin; bin++ )
       {
          aver_r[bin] = 0.0;
-         aver_dens[bin] = 0.0;
+         aver_pK[bin] = 0.0;
          aver_pU[bin] = 0.0;
          aver_pN[bin] = 0.0;
 
          aver_molR[bin] = 0.0;
+         aver_dens[bin] = 0.0;
          for ( mol=0; mol<molTypes; mol++ )
          {
             aver_molDens[bin][mol] = 0.0;
@@ -115,9 +117,14 @@
 /*
  *    read data files
  */
+
+      printf( "<> Collecting data from each processor...\n" );
+
       sprintf ( text_work, "#Frame Work_of_formation\n" );
-      sprintf ( text_pres, "#Radius Density Pressure_U Pressure_N\n" );
-      sprintf ( text_dens, "#Radius Individual_density\n" );
+      sprintf ( text_pres, "#Radius Pressure_K Pressure_U Pressure_N\n" );
+      sprintf ( text_dens, "#Radius Total_Density Individual_Densities\n" );
+
+      printf( "   Printing work of formation to work.dat\n" );
 
       file_work = fopen( "work.dat", "w" ) ;
 
@@ -147,9 +154,9 @@
                for ( bin=0; bin<maxBin; bin++ )
                {
                   fgets( line, sizeof(line), file_data );
-                  sscanf( line, "%lf%lf%lf%lf", &r, &dens, &pU, &pN );
+                  sscanf( line, "%lf%lf%lf%lf", &r, &pK, &pU, &pN );
                   aver_r[bin] += r;
-                  aver_dens[bin] += dens;
+                  aver_pK[bin] += pK;
                   aver_pU[bin] += pU;
                   aver_pN[bin] += pN;
                }
@@ -161,9 +168,23 @@
                for ( bin=0; bin<maxBin; bin++ )
                {
                   fgets( line, sizeof(line), file_data );
-
+/*
+ *                read the 1st column: radius
+ */
                   tmp = strtok( line, " " );
                   aver_molR[bin] += atof(tmp);
+/*
+ *                read the 2nd column: total density
+ */
+                  tmp = strtok( NULL, " " );
+                  if ( NULL==tmp )
+                  {
+                     break;
+                  }
+                  aver_dens[bin] += atof(tmp);
+/*
+ *                read the rest columns: individual densities
+ */
                   mol = 0;
                   while( 1 ) 
                   {
@@ -197,25 +218,32 @@
 /*
  *    write pressure.dat
  */
+
+      printf( "   Printing pressure profile to pressure.dat\n" );
+
       file_pres = fopen( "pressure.dat", "w" ) ;
       for ( bin=0; bin<maxBin; bin++ )
       {
          aver_r[bin] /= numprocs;
-         aver_dens[bin] /= numprocs;
+         aver_pK[bin] /= numprocs;
          aver_pU[bin] /= numprocs;
          aver_pN[bin] /= numprocs;
          fprintf ( file_pres, "%8.3f%20.10f%20.10f%20.10f\n", 
-                   aver_r[bin], aver_dens[bin], aver_pU[bin], aver_pN[bin] );
+                   aver_r[bin], aver_pK[bin], aver_pU[bin], aver_pN[bin] );
       }
       fclose( file_pres );
 /*
  *    write density.dat
  */
+
+      printf( "   Printing density profile to density.dat\n" );
+
       file_dens = fopen( "density.dat", "w" ) ;
       for ( bin=0; bin<maxBin; bin++ )
       {
          aver_molR[bin] /= numprocs;
-         fprintf ( file_dens, "%8.3f", aver_molR[bin] );
+         aver_dens[bin] /= numprocs;
+         fprintf ( file_dens, "%8.3f%20.10f", aver_molR[bin], aver_dens[bin] );
          for ( mol=0; mol<molTypes; mol++ )
          {
             aver_molDens[bin][mol] /= numprocs;
@@ -228,20 +256,24 @@
 /*
  *    fit density and compute surface tension
  */
-      sprintf ( command, "./fit_dens.x" );
-      system ( command );
-      file_fit = fopen( "fit_result", "r" ) ;
-      if ( NULL==file_fit )
+
+      printf( "<> Fitting density profile and computing surface tension...\n" );
+
+      system( "./fit_dens.x > fit_dens.log" );
+      file_fit_d = fopen( "fit_dens.log", "r" ) ;
+      if ( NULL==file_fit_d )
       {
-         printf( "Cannot open file: fit_result !\n" ) ;
+         printf( "Cannot open file: fit_dens.log!\n" ) ;
          exit(1);
       }
-      fgets( line, sizeof(line), file_fit );
+      fgets( line, sizeof(line), file_fit_d );
       sscanf( line, "%lf", &fit_dl );
-      fgets( line, sizeof(line), file_fit );
+      fgets( line, sizeof(line), file_fit_d );
       sscanf( line, "%lf", &fit_dg );
-      fgets( line, sizeof(line), file_fit );
+      fgets( line, sizeof(line), file_fit_d );
       sscanf( line, "%lf", &fit_re );
+      fclose( file_fit_d );
+
 
       calc_work = 0.0;
       for ( bin=0; bin<maxBin; bin++ )
@@ -249,14 +281,14 @@
          calc_work += ( aver_pN[bin]*aver_r[bin]*aver_r[bin] ) * dR;
       }
       calc_work *= pi * 2.0 ;  /*kJ/mol*/
-      surf_tens = calc_work * 3.0 / ( 4.0 * pi * fit_re * fit_re ) ; /*kJ/mol/nm^2*/
-      surf_tens /= (nA*0.1) ;  /*mN/m*/
+      eff_surf_tens = calc_work * 3.0 / ( 4.0 * pi * fit_re * fit_re ) ; /*kJ/mol/nm^2*/
+      eff_surf_tens /= (nA*0.1) ;  /*mN/m*/
       calc_work /= (nA*10.0) ;  /*10^-19 J*/
 
-      printf( "Density of the cluster     = %f nm^-3\n",   fit_dl );
-      printf( "Equimolar dividing surface = %f nm\n",      fit_re );
-      printf( "Work of formation          = %f e-19 J\n",  calc_work );
-      printf( "Effective surface tension  = %f mJ m^-2\n", surf_tens );
+      printf( "   Density of the cluster     = %f nm^-3\n",   fit_dl );
+      printf( "   Equimolar dividing surface = %f nm\n",      fit_re );
+      printf( "   Work of formation          = %f e-19 J\n",  calc_work );
+      printf( "   Effective surface tension  = %f mJ m^-2\n", eff_surf_tens );
 
 /*
  *    end of main program
