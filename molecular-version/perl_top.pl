@@ -123,7 +123,7 @@
     $spce = 0;
     open TOP,"$filenameTOP" or die;
     while(<TOP>){
-      if(/^\#include\s+\"spce\.itp\"/){ $spce = 1; }
+      if(/^\#include\s+\".*?spce\.itp\"/){ $spce = 1; }
     }
     close TOP;
 

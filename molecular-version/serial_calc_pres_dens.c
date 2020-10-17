@@ -18,36 +18,69 @@
  *  USA
  */
 
-/*****************************************************************************
- *    program in c                                                    
- *****************************************************************************/
+/********************************************************************
+ *    Serial C program to compute surface tension of droplet        *
+ *    by Xin Li, TheoChem & Biology, KTH, Stockholm, Sweden         *
+ ********************************************************************/
 
-      #include <omp.h>
-      #include <math.h>
-      #include <stdio.h>
-      #include <stdlib.h>
-      #include <xdrfile_xtc.h>
+   #include <math.h>
+   #include <stdio.h>
+   #include <stdlib.h>
+   #include <xdrfile_xtc.h>
 
-/*****************************************************************************
- *    program in c                                                    
- *****************************************************************************/
+/********************************************************************
+ *    Main program                                                  *
+ ********************************************************************/
 
-      int main ()
+   int main( int argc, char *argv[] )
+   {
+/*
+ *    There should be 3 arguments: nFrames, nStart, temperature
+ */
+      if ( argc != 4 )
       {
+         printf("%s\n", "Incorrect number of arguments (should be 3)!");
+         printf("%s\n", "1st argument: nFrame");
+         printf("%s\n", "2nd argument: nStart");
+         printf("%s\n", "3rd argument: temperature (in Kelvin)");
+         exit(1);
+      }
+      printf ( "%s\n", "#Frame Work_of_formation" );
 
-/*****************************************************************************
- *    Define variables                                                       *
- *****************************************************************************/
+/********************************************************************
+ *    Define variables                                              *
+ ********************************************************************/
 
 /*
- *    constants    
+ *    number of frames in trajectory file 
  */
+      int   frame, nFrames, nStart;
+      nFrames = atoi(argv[1]);
+      nStart = atoi(argv[2]);
 
-      const double kB   =   1.380650e-3 ; /* 10^-23 kJ K^-1 */
-      const double fQQ  = 138.935485    ;
-      const double pi   =   3.14159265 ;
-      const double nA   =   6.022142 ;    /* 10^23 mol^-1 */
-      const double temp = 298.0 ;         /* K */
+      double temperature;
+      temperature = atof(argv[3]); /* K */
+/*
+ *    Constants    
+ *
+ *    Source: 2010 CODATA
+ *    c (speed of light in vacuum):  299792458 m s^-1
+ *    mu_0 (magnetic constant):      4*pi * 10^-7 N A^-2 (A=Ampere)
+ *    e (elementary charge):         1.602176565 * 10^-19 C 
+ *    nA (Avogadro constant):        6.02214129 * 10^23 mol^-1
+ *    kB (Boltzmann constant):       1.3806488 * 10^-23 J K^-1
+ *
+ *    Coulomb constant k=1/(4*pi*epsilon_0)=c^2*mu_0/(4*pi)
+ *    fQQ = 2.99792458^2 * 10^16 * 10^-7 N m^2 C^-2
+ *        = 2.99792458^2 * 6.02214129 * 1.602176565^2 kJ mol^-1 nm e^-2
+ *        = 138.93545782935
+ *
+ *    PI to 20 decimal places:       3.14159265358979323846
+ */
+      const double kB   =   1.3806488e-3 ; /* 10^-23 kJ K^-1 */
+      const double fQQ  = 138.93545782935 ;    /* kJ mol^-1 nm e^-2 */
+      const double pi   =   3.14159265358979323846 ;
+      const double nA   =   6.02214129 ;  /* 10^23 mol^-1 */
 /*
  *    work of formation
  */
@@ -58,14 +91,10 @@
       double *rx, *ry, *rz;
       double *cx, *cy, *cz;
 /*
- *    number of frames in trajectory file 
- */
-      int   frame, nFrames, nStart;
-/*
  *    thickness of sperical layer, 0.3 Angstrom = 0.1 Sigma_Oxygen
  */  
       const double dR = 0.03 ;
-      const int    maxBin = 300 ;
+      const int    maxBin = 1000 ;
       int    bin ;
       double dV ;
       double *averDens, *averPU, *dens, *pU ;
@@ -78,13 +107,7 @@
  */
       double incr;
 /*
- *    number of threads in openmp   
- */
-      const int nThreads=8 ;
-      int    thread ;
-      double **pThread;
-/*
- *    pair pointers for openmp loop   
+ *    pair pointers for loop   
  */
       long int pair, totalPairs;
       int    *molI, *molJ;
@@ -118,11 +141,11 @@
       rvec    *x;
       XDRFILE *xtc;
 
-/*****************************************************************************
- *    Reading parameters from param.txt                                      *
- *****************************************************************************/
+/********************************************************************
+ *    Reading parameters from param.txt                             *
+ ********************************************************************/
 
-      FILE    *file_par, *file_dens, *file_pres, *file_work;
+      FILE    *file_par, *file_dens, *file_pres;
 /*
  *    atom = index of atoms in each molecule   
  *    mol  = index of molecules in the system 
@@ -138,7 +161,6 @@
       int     k;
       int     nAtoms, nMols;
       double  *molMass;
-
 /*
  *    open param.txt 
  */
@@ -152,10 +174,11 @@
  *    read number of frames
  */
       fgets( line, sizeof( line ), file_par );
-      sscanf( line, "%s%d", tmp, &nFrames );
+      /*sscanf( line, "%s%d", tmp, &nFrames );*/
       fgets( line, sizeof( line ), file_par );
-      sscanf( line, "%s%d", tmp, &nStart );
-      if ( nFrames<=nStart ) {
+      /*sscanf( line, "%s%d", tmp, &nStart );*/
+      if ( nFrames<=nStart ) 
+      {
          printf( "Error: nFrames is no larger than nStart!\n" ) ;
          exit(1);
       }
@@ -171,7 +194,8 @@
       sscanf( line, "%s%d", tmp, &molTypes );
       atomNr = malloc(molTypes * sizeof(int));
       molNr  = malloc(molTypes * sizeof(int));
-      for ( mol=0; mol<molTypes; mol++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
          fgets( line, sizeof( line ), file_par );
          sscanf( line, "%s%d", tmp, &molNr[mol] );
       }
@@ -182,14 +206,16 @@
       mass    = malloc(molTypes * sizeof(double *));
       sigma   = malloc(molTypes * sizeof(double *));
       epsilon = malloc(molTypes * sizeof(double *));
-      for ( mol=0; mol<molTypes; mol++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
          fgets( line, sizeof( line ), file_par );
          sscanf( line, "%s%d", tmp, &atomNr[mol] );
          charge[mol]  = malloc(atomNr[mol] * sizeof(double));
          mass[mol]    = malloc(atomNr[mol] * sizeof(double));
          sigma[mol]   = malloc(atomNr[mol] * sizeof(double));
          epsilon[mol] = malloc(atomNr[mol] * sizeof(double));
-         for ( atom=0; atom<atomNr[mol]; atom++ ) {
+         for ( atom=0; atom<atomNr[mol]; atom++ ) 
+         {
             fgets( line, sizeof( line ), file_par );
             sscanf( line, "%lf%lf%lf%lf",
                     &charge[mol][atom], &mass[mol][atom],
@@ -201,12 +227,17 @@
  */
       fclose( file_par );
 
+/********************************************************************
+ *    Check number of molecules and atoms in each molecule          *
+ ********************************************************************/
+
 /*
  *    calculate total number of atoms and molecules
  */
       nAtoms = 0;
       nMols = 0;
-      for ( mol=0; mol<molTypes; mol++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
          nAtoms += molNr[mol]*atomNr[mol];
          nMols += molNr[mol];
       }
@@ -216,9 +247,11 @@
  *    determine mass of each type of molecule
  */
       molMass = malloc(molTypes * sizeof(double));
-      for ( mol=0; mol<molTypes; mol++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
          molMass[mol] = 0.0;
-         for ( atom=0; atom<atomNr[mol]; atom++ ) {
+         for ( atom=0; atom<atomNr[mol]; atom++ ) 
+         {
             molMass[mol] += mass[mol][atom];
          }
       }
@@ -228,9 +261,12 @@
  */
       i = 0;
       j = 0;
-      for ( mol=0; mol<molTypes; mol++ ) {
-         for ( k=0; k<molNr[mol]; k++ ) {
-            for ( atom=0; atom<atomNr[mol]; atom++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
+         for ( k=0; k<molNr[mol]; k++ ) 
+         {
+            for ( atom=0; atom<atomNr[mol]; atom++ ) 
+            {
                iMol[i] = mol;
                iAtom[i] = atom;
                i++;
@@ -238,12 +274,16 @@
             j++;
          }
       }
-      if ( nAtoms != i ) {
+
+      if ( nAtoms != i ) 
+      {
         printf("Incorrect number of atoms in the system!\n");
         printf("Program stops at assigning atom index and mol index!\n");
         exit(1);
       }
-      if ( nMols != j ) {
+
+      if ( nMols != j ) 
+      {
         printf("Incorrect number of molecules in the system!\n");
         printf("Program stops at assigning atom index and mol index!\n");
         exit(1);
@@ -256,33 +296,40 @@
       maxi = malloc(nMols * sizeof(int));
       i = 0;
       j = 0;
-      for ( mol=0; mol<molTypes; mol++ ) {
-         for ( k=0; k<molNr[mol]; k++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
+         for ( k=0; k<molNr[mol]; k++ ) 
+         {
             mini[j] = i;
             i += atomNr[mol];
             maxi[j] = i;
             j++;
          }
       }
-      if ( nAtoms != i ) {
+
+      if ( nAtoms != i ) 
+      {
         printf("Incorrect number of atoms in the system!\n");
         printf("Program stops at assigning atom index and mol index!\n");
         exit(1);
       }
-      if ( nMols != j ) {
+
+      if ( nMols != j ) 
+      {
         printf("Incorrect number of molecules in the system!\n");
         printf("Program stops at assigning atom index and mol index!\n");
         exit(1);
       }
 
-/*****************************************************************************
- *    Allocating arrays                                                      *
- *****************************************************************************/
+/********************************************************************
+ *    Allocating arrays                                             *
+ ********************************************************************/
 
       rx = malloc( sizeof(double) * nAtoms );
       ry = malloc( sizeof(double) * nAtoms );
       rz = malloc( sizeof(double) * nAtoms );
-      if ( NULL==rx || NULL==ry || NULL==rz ) {
+      if ( NULL==rx || NULL==ry || NULL==rz ) 
+      {
          printf ("Unable to allocate arrays: rx, ry, rz!\n");
          exit(1);
       }
@@ -290,86 +337,78 @@
       cx = malloc( sizeof(double) * nMols );
       cy = malloc( sizeof(double) * nMols );
       cz = malloc( sizeof(double) * nMols );
-      if ( NULL==cx || NULL==cy || NULL==cz ) {
+      if ( NULL==cx || NULL==cy || NULL==cz ) 
+      {
          printf ("Unable to allocate arrays: cx, cy, cz!\n");
          exit(1);
       }
 
       averDens  = malloc( sizeof( double ) * maxBin );
       averPU    = malloc( sizeof( double ) * maxBin );
-      if ( NULL==averDens || NULL==averPU ) {
+      if ( NULL==averDens || NULL==averPU ) 
+      {
          printf ("Unable to allocate arrays: averDens, averPU!\n");
          exit(1);
       }
 
       dens  = malloc( sizeof( double ) * maxBin );
       pU    = malloc( sizeof( double ) * maxBin );
-      if ( NULL==dens || NULL==pU ) {
+      if ( NULL==dens || NULL==pU ) 
+      {
          printf ("Unable to allocate arrays: dens, pU!\n");
          exit(1);
       }
 
       molDens = malloc(maxBin * sizeof(double *));
-      for ( bin=0; bin<maxBin; bin++ ) {
+      for ( bin=0; bin<maxBin; bin++ ) 
+      {
          molDens[bin] = malloc(molTypes * sizeof(double));
       }
 
       x = calloc(nAtoms,sizeof(x[0]));
-      if ( NULL==x ) {
+      if ( NULL==x ) 
+      {
          printf ("Unable to allocate array: x!\n");
          exit(1);
-      }
-
-      pThread = malloc(maxBin * sizeof(double *));
-      for ( bin=0; bin<maxBin; bin++ ) {
-         pThread[bin] = malloc(nThreads * sizeof(double));
       }
 
       totalPairs = nMols*(nMols-1)/2 ;
       molI = malloc( sizeof( int ) * totalPairs );
       molJ = malloc( sizeof( int ) * totalPairs );
-      if ( NULL==molI || NULL==molJ ) {
+      if ( NULL==molI || NULL==molJ ) 
+      {
          printf ("Unable to allocate arrays: molI, molJ!\n");
          exit(1);
       }
 
-/*****************************************************************************
- *    Calculating pressure profile and work of formation                     *
- *****************************************************************************/
+/********************************************************************
+ *    Calculating pressure profile and work of formation            *
+ ********************************************************************/
 
 /*
  *    initialize arrays: averDens, averPU, molDens
  */
-      for ( bin=0; bin<maxBin; bin++ ) {
+      for ( bin=0; bin<maxBin; bin++ ) 
+      {
          averDens[bin]  = 0.0;
          averPU[bin]  = 0.0;
-         for ( mol=0; mol<molTypes; mol++ ) {
+         for ( mol=0; mol<molTypes; mol++ ) 
+         {
             molDens[bin][mol] = 0.0;
          }
-      }
-
-/*
- *    open file to write work of formation
- */
-      file_work = fopen( "work.dat", "w" );
-      if ( NULL==file_work ) {
-         printf( "Cannot open file for writing: work.dat !\n" ) ;
-         exit(1);
       }
 /*
  *    read xtc files for coordinates   
  */
       xtc = xdrfile_open (filenameXTC,"r");
       read_xtc_natoms (filenameXTC, &gmxNAtoms);
-      printf("Total Number of Frames %10d\n", nFrames);
-      printf("Starting from Frame    %10d\n", nStart);
+      /*printf("Total Number of Frames %10d\n", nFrames);*/
+      /*printf("Starting from Frame    %10d\n", nStart);*/
 /*
  *    start of loop (frame)   
  */
-      for (frame=0; frame<nFrames; frame++) {
-         if ( frame>=nStart && frame%1000==0 ) {
-            printf("Reading frame %10d ...\n", frame);
-         }
+      for (frame=0; frame<nFrames; frame++) 
+      {
 /*
  *       read xtc file   
  */
@@ -385,11 +424,15 @@
 /*
  *       skip if frame < nStart
  */
-         if (frame<nStart) { continue; }
+         if (frame<nStart) 
+         { 
+            continue; 
+         }
 /*
  *       assign coordinates
  */
-         for ( i=0; i<nAtoms; i++ ) {
+         for ( i=0; i<nAtoms; i++ ) 
+         {
             rx[i] = (double)(x[i][0]);
             ry[i] = (double)(x[i][1]);
             rz[i] = (double)(x[i][2]);
@@ -401,7 +444,9 @@
          ycom = 0.0;
          zcom = 0.0;
          msum = 0.0;
-         for ( i=0; i<nAtoms; i++ ) {
+
+         for ( i=0; i<nAtoms; i++ ) 
+         {
 /*
  *          mi = mass for atom i
  */
@@ -417,7 +462,8 @@
 /*
  *       center all atoms around COM   
  */
-         for ( i=0; i<nAtoms; i++ ) {
+         for ( i=0; i<nAtoms; i++ ) 
+         {
             rx[i] -= xcom;
             ry[i] -= ycom;
             rz[i] -= zcom;
@@ -425,28 +471,32 @@
 /*
  *       initialize arrays: dens and pU
  */
-         for ( bin=0; bin<maxBin; bin++ ) {
+         for ( bin=0; bin<maxBin; bin++ ) 
+         {
             dens[bin] = 0.0;
             pU[bin] = 0.0;
          }
 /*
  *       generate density profile   
  */
-         for (im=0; im<nMols; im++) {
+         for (im=0; im<nMols; im++) 
+         {
             cx[im] = 0.0;
             cy[im] = 0.0;
             cz[im] = 0.0;
             msum   = 0.0;
             iMin = mini[im];
             iMax = maxi[im];
-            for (i=iMin; i<iMax; i++) {
+            for (i=iMin; i<iMax; i++) 
+            {
                mi = mass[iMol[i]][iAtom[i]];
                cx[im] += mi*rx[i];
                cy[im] += mi*ry[i];
                cz[im] += mi*rz[i];
                msum   += mi;
             }
-            if ( fabs(msum-molMass[iMol[iMin]])>0.01 ) {
+            if ( fabs(msum-molMass[iMol[iMin]])>0.01 ) 
+            {
                printf ("Incorrect molar weight of molecule %d!\n", im);
                exit(1);
             }
@@ -456,7 +506,8 @@
             rci2 = cx[im]*cx[im] + cy[im]*cy[im] + cz[im]*cz[im];
             rci = sqrt( rci2 );
             bin = (int)( rci/dR );
-            if ( bin < maxBin ) {
+            if ( bin < maxBin ) 
+            {
 /*
  *             volume of the spherical layer 
  */
@@ -471,35 +522,28 @@
             }
          }
 /*
- *       initialize pU on each processor 
- */
-         for ( bin=0; bin<maxBin; bin++ ) {
-            for ( thread=0; thread<nThreads; thread++ ) {
-               pThread[bin][thread] = 0.0;
-            }
-         }
-/*
  *       find all pairs   
  */
          pair = 0;
-         for ( im=0; im<nMols-1; im++ ) {
-            for ( jm=im+1; jm<nMols; jm++ ) {
+         for ( im=0; im<nMols-1; im++ ) 
+         {
+            for ( jm=im+1; jm<nMols; jm++ ) 
+            {
                molI[pair] = im;
                molJ[pair] = jm;
                pair++;
             }
          }
-         if ( totalPairs != pair ) {
+         if ( totalPairs != pair ) 
+         {
             printf ( "Incorrect number of pairs of molecules!\n" );
             exit(1);
          }
 /*
- *       loop over all pairs to calculate pU, using OpenMP 
+ *       loop over all pairs to calculate pU
  */
-
-         #pragma omp parallel for schedule(static) num_threads(nThreads) private(im,jm,rci2,rci,rcj2,rcj,cxij,cyij,czij,cij2,cij,fxij,fyij,fzij,iMin,iMax,jMax,jMin,i,j,rxij,ryij,rzij,rij2,rij,mol,atom,qi,qj,sigi,sigj,epsi,epsj,sr2,sr6,sr12,fij,ffij,cos_i,h2,rMin,rMax,bMin,bMax,bin,r,r2,cosine,inters,incr,thread)
-
-         for ( pair=0; pair<totalPairs; pair++ ) {
+         for ( pair=0; pair<totalPairs; pair++ ) 
+         {
             im = molI[pair];
             jm = molJ[pair];
 /*
@@ -532,8 +576,10 @@
 /*
  *          start of loops (i and j)   
  */
-            for (i=iMin; i<iMax; i++) {
-            for (j=jMin; j<jMax; j++) {
+            for (i=iMin; i<iMax; i++) 
+            {
+            for (j=jMin; j<jMax; j++) 
+            {
 /*
  *             interatomic distances   
  */
@@ -566,7 +612,8 @@
  *             sig(ij) = sqrt( sig(i) * sig(j) )
  *             eps(ij) = sqrt( eps(i) * eps(j) )
  */
-               if ( epsi>0.0 && epsj>0.0 ) {
+               if ( epsi>0.0 && epsj>0.0 ) 
+               {
                   sr2  = sigi*sigj/rij2;
                   sr6  = sr2 * sr2 * sr2;
                   sr12 = sr6 * sr6;
@@ -599,25 +646,31 @@
  *          determine rmin, rmax, bmin, bmax   
  */
             cos_i = (rci2+cij2-rcj2)/(rci*cij*2.0);
-            if ( cos_i<-1 || cos_i>1 ) {
+            if ( cos_i<-1 || cos_i>1 ) 
+            {
                printf ("Error: cos_i<-1 or cos_i>1!\ncos_i = %f\n",cos_i);
                printf ("rci = %f, cij = %f, rcj = %f\n",rci,cij,rcj);
                exit(1);
             }
             h2 = rci2*(1-cos_i*cos_i);
-            if ( fabs(rci2-rcj2) <= cij2 ) {
+            if ( fabs(rci2-rcj2) <= cij2 ) 
+            {
                rMin = sqrt(h2);
-            } else {
+            } 
+            else 
+            {
                rMin = rci<rcj?rci:rcj;
             }
             rMax = rci>rcj?rci:rcj;
             bMin = (int)( rMin / dR + 0.5 );
             bMax = (int)( rMax / dR + 0.5 );
-            if ( bMin<0 ) {
+            if ( bMin<0 ) 
+            {
                printf ("Error: bMin<0!\nrMin = %f, bMin = %d",rMin,bMin);
                exit(1);
             }
-            if ( bMax<0 ) {
+            if ( bMax<0 ) 
+            {
                printf ("Error: bMax<0!\nrMax = %f, bMax = %d",rMax,bMax);
                exit(1);
             }
@@ -627,26 +680,35 @@
 /*
  *          start of loop (bin)   
  */
-            for (bin=bMin; bin<bMax; bin++) {
+            for (bin=bMin; bin<bMax; bin++) 
+            {
                r  = ( (double)(bin) + 0.5 ) * dR;
                r2 = r*r;
 /*
  *             determine number of intersections  
  */
-               if ( (rci-r)*(rcj-r) < 0.0 ) {
+               if ( (rci-r)*(rcj-r) < 0.0 ) 
+               {
                   inters = 1;
-               } else if ( rci>=r && rcj>=r ) {
+               } 
+               else if ( rci>=r && rcj>=r ) 
+               {
                   inters = 2;
-               } else {
+               } 
+               else 
+               {
                   inters = 0;
                }
                cosine = sqrt(r2-h2)/r;
 /*
  *             add increment to pU   
  */
-               incr = ffij*cosine*inters/(4.0*pi*r2);
-               thread = omp_get_thread_num();
-               pThread[bin][thread] += incr;
+               if ( inters != 0 )
+               {
+                  incr = ffij*cosine*inters/(4.0*pi*r2);
+                  pU[bin] += incr;
+                  averPU[bin] += incr;
+               }
 /*
  *          end of loop (bin)   
  */
@@ -656,25 +718,16 @@
  */
          }
 /*
- *       accumulate pU[bin] from each thread and calculate work of formation  
+ *       calculate work of formation  
  */
          work = 0.0;
-         for ( bin=0; bin<maxBin; bin++ ) {
-/*
- *          accumulate averPU[bin] and pU[bin] from each thread
- */
-            for ( thread=0; thread<nThreads; thread++ ) {
-               pU[bin] += pThread[bin][thread];
-               averPU[bin] += pThread[bin][thread];
-            }
-/*
- *          calculate work of formation
- */
+         for ( bin=0; bin<maxBin; bin++ ) 
+         {
             r = ( (double)(bin) + 0.5 ) * dR;
-            work += ( ( kB*nA*temp*dens[bin] + pU[bin] ) * r*r ) * dR;
+            work += ( ( kB*nA*temperature*dens[bin] + pU[bin] ) * r*r ) * dR;
          }
          work *= pi*2.0 ;
-         fprintf ( file_work, "%8.3f%20.6f\n", frame*0.2, work );
+         printf ( "%8d%20.10f\n", frame, work );
 /*
  *    end of loop (frame)   
  */
@@ -684,18 +737,16 @@
  *    close trajectory file
  */
       xdrfile_close (xtc);
-/*
- *    close file for work of formation
- */
-      fclose (file_work);
 
 /*
  *    average arrays: averDens, averPU, molDens
  */
-      for (bin=0; bin<maxBin; bin++) {
+      for (bin=0; bin<maxBin; bin++) 
+      {
          averDens[bin]  /= (nFrames-nStart);
          averPU[bin]    /= (nFrames-nStart);
-         for ( mol=0; mol<molTypes; mol++ ) {
+         for ( mol=0; mol<molTypes; mol++ ) 
+         {
             molDens[bin][mol] /= (nFrames-nStart);
          }
 
@@ -704,29 +755,27 @@
 /*
  *    write results
  */
-      file_pres = fopen( "pressure.dat", "w" );
-      if ( file_pres != NULL ) {
-         for ( bin=0; bin<maxBin; bin++ ) {
-            r = ( (double)(bin) + 0.5 ) * dR;
-            fprintf ( file_pres, "%8.3f%20.6f%20.6f\n", r, averDens[bin], averPU[bin] );
-         }
+      printf ( "%s\n", "#Radius Density Pressure_U Pressure_N" );
+      for ( bin=0; bin<maxBin; bin++ ) 
+      {
+         r = ( (double)(bin) + 0.5 ) * dR;
+         printf ( "%8.3f%20.10f%20.10f%20.10f\n", r, averDens[bin], averPU[bin],
+                  kB*nA*temperature*averDens[bin] + averPU[bin] );
       }
-      fclose( file_pres );
 /*
- *    write molecular densities to file
+ *    write molecular densities
  */
-      file_dens = fopen( "density.dat", "w" );
-      if ( file_dens != NULL ) {
-         for ( bin=0; bin<maxBin; bin++ ) {
-            r = ( (double)(bin) + 0.5 ) * dR;
-            fprintf ( file_dens, "%8.3f", r );
-            for (mol=0; mol<molTypes; mol++){
-               fprintf ( file_dens, "%20.6f", molDens[bin][mol] );
-            }
-            fprintf ( file_dens, "\n" );
+      printf ( "%s\n", "#Radius Individual_density" );
+      for ( bin=0; bin<maxBin; bin++ ) 
+      {
+         r = ( (double)(bin) + 0.5 ) * dR;
+         printf ( "%8.3f", r );
+         for ( mol=0; mol<molTypes; mol++ )
+         {
+            printf ( "%20.10f", molDens[bin][mol] );
          }
+         printf ( "\n" );
       }
-      fclose( file_dens );
 
 /*
  *    free arrays
@@ -734,7 +783,8 @@
       free(atomNr);
       free(molNr );
 
-      for ( mol=0; mol<molTypes; mol++ ) {
+      for ( mol=0; mol<molTypes; mol++ ) 
+      {
         free( charge[mol]  );
         free( mass[mol]    );
         free( sigma[mol]   );
@@ -764,17 +814,16 @@
       free( averDens  );
       free( averPU  );
 
-      for ( bin=0; bin<maxBin; bin++ ) {
+      for ( bin=0; bin<maxBin; bin++ ) 
+      {
         free( molDens[bin] );
-        free( pThread[bin] );
       }
       free( molDens );
-      free( pThread );
 
 /*****************************************************************************
  *    End of function main                                                   *
  *****************************************************************************/
 
-      return 0;
-      }
+   return 0;
+   }
 
