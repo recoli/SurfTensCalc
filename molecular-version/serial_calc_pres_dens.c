@@ -21,6 +21,7 @@
 /********************************************************************
  *    Serial C program to compute surface tension of droplet        *
  *    by Xin Li, TheoChem & Biology, KTH, Stockholm, Sweden         *
+ *              Version  1.6-test, 2012-01-07                       *
  ********************************************************************/
 
    #include <math.h>
@@ -35,7 +36,7 @@
    int main( int argc, char *argv[] )
    {
 /*
- *    There should be 3 arguments: nFrames, nStart, temperature
+ *    There should be 5 arguments: nFrames, nStart, temperature, rCut, boxSize
  */
       if ( argc != 6 )
       {
@@ -98,10 +99,11 @@
       const double nA   =   6.02214129 ;  /* 10^23 mol^-1 */
 
 /*
- *    kT = kB*nA*temperature
+ *    kT = kB*nA*temperature, in kJ mol^-1
  */
       double kT;
       kT = kB*nA*temperature;
+
 /*
       int comb_rule;
       double fudgeLJ, fudgeQQ;
@@ -109,7 +111,7 @@
 
       int **atomtype, **residue;
 
-      int nLJcoefs, nTypes;
+      int nTypes;
       double **LJ_C6, **LJ_C12;
       int iType, jType;
       double c6, c12;
@@ -122,7 +124,7 @@
  *    coordinates of atoms and COMs, COM = center of mass 
  */
       double *rx, *ry, *rz;
-      double *cx, *cy, *cz;
+      double **cx, **cy, **cz;
 /*
  *    thickness of sperical layer, 0.3 Angstrom = 0.1 Sigma_Oxygen
  */  
@@ -140,6 +142,7 @@
  *    densities for different molecules 
  */
       double **molDens ;
+      double ***resDens ;
 /*
  *    increment, temporary variable 
  */
@@ -160,6 +163,9 @@
       double mi, qi, qj ;
       double r, r2 ;
       double chord2 ;
+
+      double **r_ci2, **r_ci;
+
       double cxi, cyi, czi, rci2, rci ;
       double cxj, cyj, czj, rcj2, rcj ;
       double cxij, cyij, czij, cij2, cij ; 
@@ -184,6 +190,8 @@
       rvec    *x;
       XDRFILE *xtc;
 
+
+
 /********************************************************************
  *    Reading parameters from param.txt                             *
  ********************************************************************/
@@ -194,16 +202,20 @@
  *    mol  = index of molecules in the system 
  */
       int     mol, atom, molTypes;
+      int     res, ires, jres, km;
 /*
- *    atomNr = number of atoms in each type of molecule  
+ *    atom_in_res = number of atoms in each type of molecule & residue
+ *    atom_in_mol = number of atoms in each type of molecule
+ *    resNr  = number of residues in each type of molecule
  *    molNr  = number of each type of molecule in the system 
  */
-      int     *atomNr, *molNr, *iAtom, *iMol, *mini, *maxi;
+      int     **atom_in_res, *atom_in_mol;
+      int     *resNr, *molNr, *iAtom, *iMol, **mini, **maxi;
       char    line[256], tmp[50], filenameXTC[50];
       double  **mass, **charge, **sigma, **epsilon;
-      int     k;
       int     nAtoms, nMols;
       double  *molMass;
+      double  **resMass;
 /*
  *    open param.txt 
  */
@@ -231,18 +243,32 @@
       sscanf( line, "%s%s", tmp, filenameXTC );
 /*
  *    read number of molecules
- *    atomNr: number of atoms in this type of molecule
+ *    atom_in_res: number of atoms in this type of molecule and residue
+ *    atom_in_mol = number of atoms in each type of molecule
  *    molNr: number of this type of molecule in the system
  */
       fgets( line, sizeof( line ), file_par );
       sscanf( line, "%s%d", tmp, &molTypes );
-      atomNr = malloc(molTypes * sizeof(int));
+
+      atom_in_res = malloc(molTypes * sizeof(int *));
+      atom_in_mol = malloc(molTypes * sizeof(int));
+
+      resNr  = malloc(molTypes * sizeof(int));
       molNr  = malloc(molTypes * sizeof(int));
+
       for ( mol=0; mol<molTypes; mol++ ) 
       {
          fgets( line, sizeof( line ), file_par );
-         sscanf( line, "%s%d", tmp, &molNr[mol] );
+         sscanf( line, "%s%d%d", tmp, &molNr[mol], &resNr[mol] );
+
+         atom_in_res[mol]  = malloc(resNr[mol] * sizeof(int));
+         for ( res=0; res<resNr[mol]; res++ )
+         {
+            atom_in_res[mol][res] = 0;
+         }
+
       }
+
 /*
  *    read atomic information
  */
@@ -251,31 +277,33 @@
       sigma   = malloc(molTypes * sizeof(double *));
       epsilon = malloc(molTypes * sizeof(double *));
       atomtype = malloc(molTypes * sizeof(int *));
-      residue  = malloc(molTypes * sizeof(int *));
+      residue = malloc(molTypes * sizeof(int *));
       for ( mol=0; mol<molTypes; mol++ ) 
       {
          fgets( line, sizeof( line ), file_par );
-         sscanf( line, "%s%d", tmp, &atomNr[mol] );
-         charge[mol]  = malloc(atomNr[mol] * sizeof(double));
-         mass[mol]    = malloc(atomNr[mol] * sizeof(double));
-         sigma[mol]   = malloc(atomNr[mol] * sizeof(double));
-         epsilon[mol] = malloc(atomNr[mol] * sizeof(double));
-         atomtype[mol] = malloc(atomNr[mol] * sizeof(int));
-         residue[mol]  = malloc(atomNr[mol] * sizeof(int));
-         for ( atom=0; atom<atomNr[mol]; atom++ ) 
+         sscanf( line, "%s%d", tmp, &atom_in_mol[mol] );
+         charge[mol]  = malloc(atom_in_mol[mol] * sizeof(double));
+         mass[mol]    = malloc(atom_in_mol[mol] * sizeof(double));
+         sigma[mol]   = malloc(atom_in_mol[mol] * sizeof(double));
+         epsilon[mol] = malloc(atom_in_mol[mol] * sizeof(double));
+         atomtype[mol] = malloc(atom_in_mol[mol] * sizeof(int));
+         residue[mol] = malloc(atom_in_mol[mol] * sizeof(int));
+         for ( atom=0; atom<atom_in_mol[mol]; atom++ ) 
          {
             fgets( line, sizeof( line ), file_par );
             sscanf( line, "%lf%lf%lf%lf%d%d",
                     &charge[mol][atom], &mass[mol][atom],
                     &sigma[mol][atom],  &epsilon[mol][atom],
                     &atomtype[mol][atom], &residue[mol][atom] );
+            res = residue[mol][atom];
+            atom_in_res[mol][res]++;
          }
       }
 /*
  *    read Lennard-Jones C6 and C12 coefficients
  */
       fgets( line, sizeof( line ), file_par );
-      sscanf( line, "%s%d%d", tmp, &nLJcoefs, &nTypes );
+      sscanf( line, "%s%d", tmp, &nTypes );
       LJ_C6  = malloc(nTypes * sizeof(double *));
       LJ_C12 = malloc(nTypes * sizeof(double *));
       for ( iType=0; iType<nTypes; iType++ )
@@ -303,6 +331,7 @@
  */
       fclose( file_par );
 
+
 /********************************************************************
  *    Check number of molecules and atoms in each molecule          *
  ********************************************************************/
@@ -314,7 +343,7 @@
       nMols = 0;
       for ( mol=0; mol<molTypes; mol++ ) 
       {
-         nAtoms += molNr[mol]*atomNr[mol];
+         nAtoms += molNr[mol]*atom_in_mol[mol];
          nMols += molNr[mol];
       }
       iAtom = malloc(nAtoms * sizeof(int));
@@ -326,28 +355,48 @@
       for ( mol=0; mol<molTypes; mol++ ) 
       {
          molMass[mol] = 0.0;
-         for ( atom=0; atom<atomNr[mol]; atom++ ) 
+         for ( atom=0; atom<atom_in_mol[mol]; atom++ ) 
          {
             molMass[mol] += mass[mol][atom];
          }
       }
+
+      resMass = malloc(molTypes * sizeof(double *));
+      for ( mol=0; mol<molTypes; mol++ )
+      {
+         resMass[mol]  = malloc(resNr[mol] * sizeof(double));
+
+         iMin = 0;
+         iMax = 0;
+         for ( res=0; res<resNr[mol]; res++ )
+         {
+            resMass[mol][res] = 0.0;
+            iMax += atom_in_res[mol][res];
+            for ( atom=iMin; atom<iMax; atom++ )
+            {
+               resMass[mol][res] += mass[mol][atom];
+            }
+            iMin += atom_in_res[mol][res];
+         }
+      }
+
 /*
  *    assign atom index and mol index for each atom in the system 
- *    i = atom index, j = mol index
+ *    i = atom index, im = mol index
  */
       i = 0;
-      j = 0;
+      im = 0;
       for ( mol=0; mol<molTypes; mol++ ) 
       {
-         for ( k=0; k<molNr[mol]; k++ ) 
+         for ( km=0; km<molNr[mol]; km++ ) 
          {
-            for ( atom=0; atom<atomNr[mol]; atom++ ) 
+            for ( atom=0; atom<atom_in_mol[mol]; atom++ ) 
             {
                iMol[i] = mol;
                iAtom[i] = atom;
                i++;
             }
-            j++;
+            im++;
          }
       }
 
@@ -358,7 +407,7 @@
         exit(1);
       }
 
-      if ( nMols != j ) 
+      if ( nMols != im ) 
       {
         printf("Incorrect number of molecules in the system!\n");
         printf("Program stops at assigning atom index and mol index!\n");
@@ -366,20 +415,35 @@
       }
 /*
  *    assign starting index and ending index for each molecule in the system 
- *    i = atom index, j = mol index
+ *    i = atom index, im = mol index
  */
-      mini = malloc(nMols * sizeof(int));
-      maxi = malloc(nMols * sizeof(int));
+
+      mini = malloc(nMols * sizeof(int *));
+      maxi = malloc(nMols * sizeof(int *));
+      im = 0;
+      for ( mol=0; mol<molTypes; mol++ )
+      {
+         for ( km=0; km<molNr[mol]; km++ )
+         {
+            mini[im] = malloc(resNr[mol] * sizeof(int));
+            maxi[im] = malloc(resNr[mol] * sizeof(int));
+            im++;
+         }
+      }
+
       i = 0;
-      j = 0;
+      im = 0;
       for ( mol=0; mol<molTypes; mol++ ) 
       {
-         for ( k=0; k<molNr[mol]; k++ ) 
+         for ( km=0; km<molNr[mol]; km++ ) 
          {
-            mini[j] = i;
-            i += atomNr[mol];
-            maxi[j] = i;
-            j++;
+            for ( res=0; res<resNr[mol]; res++ )
+            {
+               mini[im][res] = i;
+               i += atom_in_res[mol][res];
+               maxi[im][res] = i;
+            }
+            im++;
          }
       }
 
@@ -390,7 +454,7 @@
         exit(1);
       }
 
-      if ( nMols != j ) 
+      if ( nMols != im ) 
       {
         printf("Incorrect number of molecules in the system!\n");
         printf("Program stops at assigning atom index and mol index!\n");
@@ -410,12 +474,27 @@
          exit(1);
       }
 
-      cx = malloc( sizeof(double) * nMols );
-      cy = malloc( sizeof(double) * nMols );
-      cz = malloc( sizeof(double) * nMols );
-      if ( NULL==cx || NULL==cy || NULL==cz ) 
+      cx = malloc( sizeof(double *) * nMols );
+      cy = malloc( sizeof(double *) * nMols );
+      cz = malloc( sizeof(double *) * nMols );
+      r_ci2 = malloc( sizeof(double *) * nMols );
+      r_ci  = malloc( sizeof(double *) * nMols );
+      im = 0;
+      for ( mol=0; mol<molTypes; mol++ )
       {
-         printf ("Unable to allocate arrays: cx, cy, cz!\n");
+         for ( km=0; km<molNr[mol]; km++ )
+         {
+            cx[im]  = malloc(resNr[mol] * sizeof(double));
+            cy[im]  = malloc(resNr[mol] * sizeof(double));
+            cz[im]  = malloc(resNr[mol] * sizeof(double));
+            r_ci2[im]  = malloc(resNr[mol] * sizeof(double));
+            r_ci[im]   = malloc(resNr[mol] * sizeof(double));
+            im++;
+         }
+      }
+      if ( NULL==cx || NULL==cy || NULL==cz || NULL==r_ci2 || NULL==r_ci ) 
+      {
+         printf ("Unable to allocate arrays: cx, cy, cz, r_ci2, r_ci!\n");
          exit(1);
       }
 
@@ -440,9 +519,15 @@
       }
 
       molDens = malloc(maxBin * sizeof(double *));
+      resDens = malloc(maxBin * sizeof(double **));
       for ( bin=0; bin<maxBin; bin++ ) 
       {
          molDens[bin] = malloc(molTypes * sizeof(double));
+         resDens[bin] = malloc(molTypes * sizeof(double *));
+         for ( mol=0; mol<molTypes; mol++ )
+         {
+            resDens[bin][mol] = malloc(resNr[mol] * sizeof(double));
+         }
       }
 
       x = calloc(nAtoms,sizeof(x[0]));
@@ -461,6 +546,7 @@
          exit(1);
       }
 
+
 /********************************************************************
  *    Calculating pressure profile and work of formation            *
  ********************************************************************/
@@ -477,6 +563,10 @@
          for ( mol=0; mol<molTypes; mol++ ) 
          {
             molDens[bin][mol] = 0.0;
+            for ( res=0; res<resNr[mol]; res++ )
+            {
+               resDens[bin][mol][res] = 0.0;
+            }
          }
       }
 /*
@@ -563,47 +653,62 @@
 /*
  *       generate density profile   
  */
-         for (im=0; im<nMols; im++) 
-         {
-            cx[im] = 0.0;
-            cy[im] = 0.0;
-            cz[im] = 0.0;
-            msum   = 0.0;
-            iMin = mini[im];
-            iMax = maxi[im];
-            for (i=iMin; i<iMax; i++) 
-            {
-               mi = mass[iMol[i]][iAtom[i]];
-               cx[im] += mi*rx[i];
-               cy[im] += mi*ry[i];
-               cz[im] += mi*rz[i];
-               msum   += mi;
-            }
-            if ( fabs(msum-molMass[iMol[iMin]])>0.01 ) 
-            {
-               printf ("Incorrect molar weight of molecule %d!\n", im);
-               exit(1);
-            }
-            cx[im] /= msum;
-            cy[im] /= msum;
-            cz[im] /= msum;
-            rci2 = cx[im]*cx[im] + cy[im]*cy[im] + cz[im]*cz[im];
-            rci = sqrt( rci2 );
 
-            bin = (int)( rci/dR );
-            if ( bin < maxBin ) 
+         im = -1;
+         for ( mol=0; mol<molTypes; mol++ )
+         {
+            for ( km=0; km<molNr[mol]; km++ )
             {
-/*
- *             volume of the spherical layer 
- */
-               dV = pi*4.0/3.0*( pow((double)(bin+1)*dR,3.0) - pow((double)bin*dR,3.0) );
-/*
- *             add increment to dens[bin] and averDens[bin]
- */
-               incr = 1.0/dV;
-               dens[bin] += incr;
-               averDens[bin] += incr;
-               molDens[bin][iMol[iMin]] += incr;
+               im++;
+               for ( res=0; res<resNr[mol]; res++ )
+               {
+                  cx[im][res] = 0.0;
+                  cy[im][res] = 0.0;
+                  cz[im][res] = 0.0;
+                  msum = 0.0;
+                  iMin = mini[im][res];
+                  iMax = maxi[im][res];
+                  for (i=iMin; i<iMax; i++) 
+                  {
+                     mi = mass[iMol[i]][iAtom[i]];
+                     cx[im][res] += mi*rx[i];
+                     cy[im][res] += mi*ry[i];
+                     cz[im][res] += mi*rz[i];
+                     msum += mi;
+                  }
+                  if ( fabs(msum-resMass[iMol[iMin]][res])>0.01 ) 
+                  {
+                     printf ("Incorrect molar weight of molecule %d residue %d!\n", im, res+1);
+                     printf ("msum = %f, resMass[%d][%d]=%f!\n", 
+                             msum, iMol[iMin], res, resMass[iMol[iMin]][res]);
+                     exit(1);
+                  }
+                  cx[im][res] /= msum;
+                  cy[im][res] /= msum;
+                  cz[im][res] /= msum;
+
+                  r_ci2[im][res] = cx[im][res]*cx[im][res] 
+                                 + cy[im][res]*cy[im][res] 
+                                 + cz[im][res]*cz[im][res];
+                  r_ci[im][res] = sqrt( r_ci2[im][res] );
+
+                  bin = (int)( r_ci[im][res]/dR );
+
+                  if ( bin < maxBin ) 
+                  {
+/*            
+ *                   volume of the spherical layer 
+ */           
+                     dV = pi*4.0/3.0*( pow((double)(bin+1)*dR,3.0) - pow((double)bin*dR,3.0) );
+/*            
+ *                   add increment to dens[bin] and averDens[bin]
+ */           
+                     incr = 1.0/dV;
+                     dens[bin] += incr;
+                     averDens[bin] += incr;
+                     resDens[bin][iMol[iMin]][res] += incr;
+                  }
+               }
             }
          }
 /*
@@ -631,218 +736,218 @@
          {
             im = molI[pair];
             jm = molJ[pair];
-/*
- *          center of mass distances   
- */
-            rci2 = cx[im]*cx[im] + cy[im]*cy[im] + cz[im]*cz[im];
-            rci = sqrt( rci2 );
 
-            rcj2 = cx[jm]*cx[jm] + cy[jm]*cy[jm] + cz[jm]*cz[jm];
-            rcj = sqrt( rcj2 );
-
-            cxij = cx[jm] - cx[im];
-            cyij = cy[jm] - cy[im];
-            czij = cz[jm] - cz[im];
-            cij2 = cxij*cxij + cyij*cyij + czij*czij;
-            cij  = sqrt( cij2 );
-
-
-/*        Use PBC to comput forces ??? */
-
-
-
-
-/*
- *          calculate forces between im and jm
- */
-            fxijLJ = 0.0;
-            fyijLJ = 0.0;
-            fzijLJ = 0.0;
-
-            fxijQQ = 0.0;
-            fyijQQ = 0.0;
-            fzijQQ = 0.0;
-
-            fxijLJc = 0.0;
-            fyijLJc = 0.0;
-            fzijLJc = 0.0;
-
-/*
- *          determine the upper and lower boundary of i and j   
- */
-            iMin = mini[im];
-            iMax = maxi[im];
-            jMin = mini[jm];
-            jMax = maxi[jm];
-/*
- *          start of loops (i and j)   
- */
-            for (i=iMin; i<iMax; i++) 
+            for ( ires=0; ires<resNr[iMol[mini[im][0]]]; ires++ )
             {
-            for (j=jMin; j<jMax; j++) 
+            for ( jres=0; jres<resNr[iMol[mini[jm][0]]]; jres++ )
             {
 /*
- *             interatomic distances   
- */
-               rxij = rx[j] - rx[i];
-               ryij = ry[j] - ry[i];
-               rzij = rz[j] - rz[i];
-               rij2 = rxij*rxij + ryij*ryij + rzij*rzij;
-               rij  = sqrt( rij2 );
-/*
- *             parameters for atom i and j
- */
-               mol  = iMol[i];
-               atom = iAtom[i];
-               qi   =  charge[mol][atom];
-               iType = atomtype[mol][atom];
-
-               mol  = iMol[j];
-               atom = iAtom[j];
-               qj   =  charge[mol][atom];
-               jType = atomtype[mol][atom];
-
-               c6   =   LJ_C6[iType][jType];
-               c12  =  LJ_C12[iType][jType];
-/*
- *             VDW forces, LJ potential ( sigma, epsilon )
- *
- *             U = C12 / R^12 - C6 / R^6
- *             F = 12 * C12 / R^13 - 6 * C6 / R^7
- *             vecF = ( 12 * C12 / R^14 - 6 * C6 / R^8 ) * vecR
- *                  = ( 2 * C12 / R^12 - C6 / R^6 ) * 6 / R^2 * vecR
- *
- *             U = 4 * eps * ( sig^12/R^12 - sig^6/R^6 )
- *             F = 4 * eps * ( 12*sig^12/R^13 - 6*sig^6/R^7 )
- *             vecF = 4 * eps * ( 12*sig^12/R^14 - 6*sig^6/R^8 ) * vecR
- *                  = 24 * eps * ( 2*(sig/R)^12 - (sig/R)^6 ) / R^2 * vecR
- */
-               if ( c6!=0.0 && c12!=0.0 ) 
+ *             center of mass distances   
+ */          
+               rci2 = r_ci2[im][ires];
+               rci = r_ci[im][ires];
+             
+               rcj2 = r_ci2[jm][jres];
+               rcj = r_ci[jm][jres];
+             
+               cxij = cx[jm][jres] - cx[im][ires];
+               cyij = cy[jm][jres] - cy[im][ires];
+               czij = cz[jm][jres] - cz[im][ires];
+               cij2 = cxij*cxij + cyij*cyij + czij*czij;
+               cij  = sqrt( cij2 );
+/*           
+ *             calculate forces between im and jm
+ */          
+               fxijLJ = 0.0;
+               fyijLJ = 0.0;
+               fzijLJ = 0.0;
+             
+               fxijQQ = 0.0;
+               fyijQQ = 0.0;
+               fzijQQ = 0.0;
+             
+               fxijLJc = 0.0;
+               fyijLJc = 0.0;
+               fzijLJc = 0.0;
+/*           
+ *             determine the upper and lower boundary of i and j   
+ */          
+               iMin = mini[im][ires];
+               iMax = maxi[im][ires];
+               jMin = mini[jm][jres];
+               jMax = maxi[jm][jres];
+/*           
+ *             start of loops (i and j)   
+ */          
+               for (i=iMin; i<iMax; i++) 
                {
-                  rij6 = rij2 * rij2 * rij2 ;
-                  rij12 = rij6 * rij6;
-                  fij = ( c12*2.0/rij12 - c6/rij6 ) * 6.0/rij2;
-                  fxijLJ = fxijLJ + fij * rxij;
-                  fyijLJ = fyijLJ + fij * ryij;
-                  fzijLJ = fzijLJ + fij * rzij;
-
-                  if ( rij <= rCut )
+               for (j=jMin; j<jMax; j++) 
+               {
+/*           
+ *                interatomic distances   
+ */          
+                  rxij = rx[j] - rx[i];
+                  ryij = ry[j] - ry[i];
+                  rzij = rz[j] - rz[i];
+                  rij2 = rxij*rxij + ryij*ryij + rzij*rzij;
+                  rij  = sqrt( rij2 );
+/*           
+ *                parameters for atom i and j
+ */          
+                  mol  = iMol[i];
+                  atom = iAtom[i];
+                  qi   =  charge[mol][atom];
+                  iType = atomtype[mol][atom];
+             
+                  mol  = iMol[j];
+                  atom = iAtom[j];
+                  qj   =  charge[mol][atom];
+                  jType = atomtype[mol][atom];
+             
+                  c6   =   LJ_C6[iType][jType];
+                  c12  =  LJ_C12[iType][jType];
+/*           
+ *                VDW forces, LJ potential ( sigma, epsilon )
+ *           
+ *                U = C12 / R^12 - C6 / R^6
+ *                F = 12 * C12 / R^13 - 6 * C6 / R^7
+ *                vecF = ( 12 * C12 / R^14 - 6 * C6 / R^8 ) * vecR
+ *                     = ( 2 * C12 / R^12 - C6 / R^6 ) * 6 / R^2 * vecR
+ *           
+ *                U = 4 * eps * ( sig^12/R^12 - sig^6/R^6 )
+ *                F = 4 * eps * ( 12*sig^12/R^13 - 6*sig^6/R^7 )
+ *                vecF = 4 * eps * ( 12*sig^12/R^14 - 6*sig^6/R^8 ) * vecR
+ *                     = 24 * eps * ( 2*(sig/R)^12 - (sig/R)^6 ) / R^2 * vecR
+ */          
+                  if ( c6!=0.0 && c12!=0.0 ) 
                   {
-                     fxijLJc = fxijLJc + fij * rxij;
-                     fyijLJc = fyijLJc + fij * ryij;
-                     fzijLJc = fzijLJc + fij * rzij;
+                     rij6 = rij2 * rij2 * rij2 ;
+                     rij12 = rij6 * rij6;
+                     fij = ( c12*2.0/rij12 - c6/rij6 ) * 6.0/rij2;
+                     fxijLJ = fxijLJ + fij * rxij;
+                     fyijLJ = fyijLJ + fij * ryij;
+                     fzijLJ = fzijLJ + fij * rzij;
+             
+                     if ( rij <= rCut )
+                     {
+                        fxijLJc = fxijLJc + fij * rxij;
+                        fyijLJc = fyijLJc + fij * ryij;
+                        fzijLJc = fzijLJc + fij * rzij;
+                     }
+             
                   }
-
+/*           
+ *                Coulomb forces   
+ */          
+                  if ( qi!=0.0 && qj!=0.0 )
+                  {
+                     fij  = fQQ * qi * qj / ( rij2 * rij );
+                     fxijQQ = fxijQQ + fij * rxij;
+                     fyijQQ = fyijQQ + fij * ryij;
+                     fzijQQ = fzijQQ + fij * rzij;
+                  }
+/*           
+ *             end of loops (i and j)   
+ */          
                }
-/*
- *             Coulomb forces   
- */
-               if ( qi!=0.0 && qj!=0.0 )
-               {
-                  fij  = fQQ * qi * qj / ( rij2 * rij );
-                  fxijQQ = fxijQQ + fij * rxij;
-                  fyijQQ = fyijQQ + fij * ryij;
-                  fzijQQ = fzijQQ + fij * rzij;
                }
-/*
- *          end of loops (i and j)   
- */
-            }
-            }
-/*
- *          calculate the force along i->j direction   
- *          ffij > 0 :  repulsive force  
- *          ffij < 0 :  attractive force 
- */
-            ffijLJ = ( fxijLJ*cxij + fyijLJ*cyij + fzijLJ*czij ) / cij;
-            ffijQQ = ( fxijQQ*cxij + fyijQQ*cyij + fzijQQ*czij ) / cij;
-            ffijLJc = ( fxijLJc*cxij + fyijLJc*cyij + fzijLJc*czij ) / cij;
-
-/*
- *          determine rmin, rmax, bmin, bmax   
- */
-            cos_i = (rci2+cij2-rcj2)/(rci*cij*2.0);
-            if ( fabs(cos_i)>1.0 ) 
-            {
-               printf ("Error: cos_i<-1 or cos_i>1!\ncos_i = %f\n",cos_i);
-               printf ("rci = %f, cij = %f, rcj = %f\n",rci,cij,rcj);
-               exit(1);
-            }
-            h2 = rci2*(1-cos_i*cos_i);
-            if ( fabs(rci2-rcj2) <= cij2 ) 
-            {
-               rMin = sqrt(h2);
-            } 
-            else 
-            {
-               rMin = rci<rcj?rci:rcj;
-            }
-            rMax = rci>rcj?rci:rcj;
-            bMin = (int)( rMin / dR + 0.5 );
-            bMax = (int)( rMax / dR + 0.5 );
-            if ( bMin<0 ) 
-            {
-               printf ("Error: bMin<0!\nrMin = %f, bMin = %d",rMin,bMin);
-               exit(1);
-            }
-            if ( bMax<0 ) 
-            {
-               printf ("Error: bMax<0!\nrMax = %f, bMax = %d",rMax,bMax);
-               exit(1);
-            }
-            bMin = (bMin>=maxBin)?maxBin:bMin;
-            bMax = (bMax>=maxBin)?maxBin:bMax;
-
-/*
- *          start of loop (bin)   
- */
-            for (bin=bMin; bin<bMax; bin++) 
-            {
-               r  = ( (double)(bin) + 0.5 ) * dR;
-               r2 = r*r;
-/*
- *             determine number of intersections  
- */
-               if ( (rci-r)*(rcj-r) < 0.0 ) 
+/*           
+ *             calculate the force along i->j direction   
+ *             ffij > 0 :  repulsive force  
+ *             ffij < 0 :  attractive force 
+ */          
+               ffijLJ = ( fxijLJ*cxij + fyijLJ*cyij + fzijLJ*czij ) / cij;
+               ffijQQ = ( fxijQQ*cxij + fyijQQ*cyij + fzijQQ*czij ) / cij;
+               ffijLJc = ( fxijLJc*cxij + fyijLJc*cyij + fzijLJc*czij ) / cij;
+/*           
+ *             determine rmin, rmax, bmin, bmax   
+ */          
+               cos_i = (rci2+cij2-rcj2)/(rci*cij*2.0);
+               if ( fabs(cos_i)>1.0 ) 
                {
-                  inters = 1;
-               } 
-               else if ( rci>=r && rcj>=r ) 
+                  printf ("Error: cos_i<-1 or cos_i>1!\ncos_i = %f\n",cos_i);
+                  printf ("rci = %f, cij = %f, rcj = %f\n",rci,cij,rcj);
+                  exit(1);
+               }
+               h2 = rci2*(1-cos_i*cos_i);
+               if ( fabs(rci2-rcj2) <= cij2 ) 
                {
-                  if ( h2==r2 )
-                  {
-                     inters = 1;
-                  }
-                  else
-                  {
-                     inters = 2;
-                  }
+                  rMin = sqrt(h2);
                } 
                else 
                {
-                  inters = 0;
+                  rMin = rci<rcj?rci:rcj;
                }
-               cosine = sqrt(r2-h2)/r;
-/*
- *             add increment to pU   
- */
-               if ( inters != 0 )
+               rMax = rci>rcj?rci:rcj;
+               bMin = (int)( rMin / dR + 0.5 );
+               bMax = (int)( rMax / dR + 0.5 );
+               if ( bMin<0 ) 
                {
-                  incrLJ = ffijLJ*cosine*inters/(4.0*pi*r2);
-                  incrQQ = ffijQQ*cosine*inters/(4.0*pi*r2);
-                  incrLJc = ffijLJc*cosine*inters/(4.0*pi*r2);
-
-                  pULJ[bin] += incrLJ;
-                  pUQQ[bin] += incrQQ;
-                  pULJc[bin] += incrLJc;
-
-                  averPULJ[bin] += incrLJ;
-                  averPUQQ[bin] += incrQQ;
-                  averPULJc[bin] += incrLJc;
+                  printf ("Error: bMin<0!\nrMin = %f, bMin = %d",rMin,bMin);
+                  exit(1);
+               }
+               if ( bMax<0 ) 
+               {
+                  printf ("Error: bMax<0!\nrMax = %f, bMax = %d",rMax,bMax);
+                  exit(1);
+               }
+               bMin = (bMin>=maxBin)?maxBin:bMin;
+               bMax = (bMax>=maxBin)?maxBin:bMax;
+/*           
+ *             start of loop (bin)   
+ */          
+               for (bin=bMin; bin<bMax; bin++) 
+               {
+                  r  = ( (double)(bin) + 0.5 ) * dR;
+                  r2 = r*r;
+/*           
+ *                determine number of intersections  
+ */          
+                  if ( (rci-r)*(rcj-r) < 0.0 ) 
+                  {
+                     inters = 1;
+                  } 
+                  else if ( rci>=r && rcj>=r ) 
+                  {
+                     if ( h2==r2 )
+                     {
+                        inters = 1;
+                     }
+                     else
+                     {
+                        inters = 2;
+                     }
+                  } 
+                  else 
+                  {
+                     inters = 0;
+                  }
+                  cosine = sqrt(r2-h2)/r;
+/*           
+ *                add increment to pU   
+ */          
+                  if ( inters != 0 )
+                  {
+                     incrLJ = ffijLJ*cosine*inters/(4.0*pi*r2);
+                     incrQQ = ffijQQ*cosine*inters/(4.0*pi*r2);
+                     incrLJc = ffijLJc*cosine*inters/(4.0*pi*r2);
+             
+                     pULJ[bin] += incrLJ;
+                     pUQQ[bin] += incrQQ;
+                     pULJc[bin] += incrLJc;
+             
+                     averPULJ[bin] += incrLJ;
+                     averPUQQ[bin] += incrQQ;
+                     averPULJc[bin] += incrLJc;
+                  }
+/*           
+ *             end of loop (bin)   
+ */          
                }
 /*
- *          end of loop (bin)   
+ *          end of loop (ires, jres)
  */
+            }
             }
 /*
  *       end of loop (pair)    
@@ -867,7 +972,6 @@
  *    end of loop (frame)   
  */
       }
-
 /*
  *    close trajectory file
  */
@@ -884,7 +988,10 @@
          averPULJc[bin] /= (nFrames-nStart);
          for ( mol=0; mol<molTypes; mol++ ) 
          {
-            molDens[bin][mol] /= (nFrames-nStart);
+            for ( res=0; res<resNr[mol]; res++ )
+            {
+               resDens[bin][mol][res] /= (nFrames-nStart);
+            }
          }
 
       }
@@ -916,7 +1023,10 @@
          printf ( "%8.3f%20.10f", r, averDens[bin] );
          for ( mol=0; mol<molTypes; mol++ )
          {
-            printf ( "%20.10f", molDens[bin][mol] );
+            for ( res=0; res<resNr[mol]; res++ )
+            {
+               printf ( "%20.10f", resDens[bin][mol][res] );
+            }
          }
          printf ( "\n" );
       }
@@ -924,16 +1034,10 @@
 /*
  *    free arrays
  */
-      free(atomNr);
-      free(molNr );
+      free(atom_in_mol);
+      free(atom_in_res);
+      free(molNr);
 
-      for ( mol=0; mol<molTypes; mol++ ) 
-      {
-        free( charge[mol]  );
-        free( mass[mol]    );
-        free( sigma[mol]   );
-        free( epsilon[mol] );
-      }
       free( charge  );
       free( mass    );
       free( sigma   );
@@ -965,11 +1069,7 @@
       free( averPUQQ  );
       free( averPULJc );
 
-      for ( bin=0; bin<maxBin; bin++ ) 
-      {
-        free( molDens[bin] );
-      }
-      free( molDens );
+      free( resDens );
 
 /*****************************************************************************
  *    End of function main                                                   *
