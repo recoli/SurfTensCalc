@@ -37,15 +37,17 @@
 /*
  *    There should be 3 arguments: nFrames, nStart, temperature
  */
-      if ( argc != 4 )
+      if ( argc != 6 )
       {
-         printf("%s\n", "Incorrect number of arguments (should be 3)!");
+         printf("%s\n", "Incorrect number of arguments (should be 5)!");
          printf("%s\n", "1st argument: nFrame");
          printf("%s\n", "2nd argument: nStart");
          printf("%s\n", "3rd argument: temperature (in Kelvin)");
+         printf("%s\n", "4th argument: cutoff radius (in nm)");
+         printf("%s\n", "5th argument: approx. box size (in nm)");
          exit(1);
       }
-      printf ( "%s\n", "#Frame Work_of_formation" );
+      printf ( "%s\n", "#Frame  W_Full  W_Cut" );
 
 /********************************************************************
  *    Define variables                                              *
@@ -66,6 +68,12 @@
 
       double temperature;
       temperature = atof(argv[3]); /* K */
+
+      double rCut;
+      rCut = atof(argv[4]); /* nm */
+
+      double boxSize;
+      boxSize = atof(argv[5]); /* nm */
 
 /*
  *    Constants    
@@ -88,6 +96,12 @@
       const double fQQ  = 138.93545782935 ;    /* kJ mol^-1 nm e^-2 */
       const double pi   =   3.14159265358979323846 ;
       const double nA   =   6.02214129 ;  /* 10^23 mol^-1 */
+
+/*
+ *    kT = kB*nA*temperature
+ */
+      double kT;
+      kT = kB*nA*temperature;
 /*
       int comb_rule;
       double fudgeLJ, fudgeQQ;
@@ -95,7 +109,7 @@
 
       int **atomtype, **residue;
 
-      int nLJCoefs, nTypes;
+      int nLJcoefs, nTypes;
       double **LJ_C6, **LJ_C12;
       int iType, jType;
       double c6, c12;
@@ -103,7 +117,7 @@
 /*
  *    work of formation
  */
-      double work;
+      double workFull, workCut;
 /*
  *    coordinates of atoms and COMs, COM = center of mass 
  */
@@ -113,10 +127,15 @@
  *    thickness of sperical layer, 0.3 Angstrom = 0.1 Sigma_Oxygen
  */  
       const double dR = 0.03 ;
-      const int    maxBin = 1000 ;
+      int maxBin ;
+      maxBin = (int)( boxSize * 0.4 / dR ) ;
+
       int    bin ;
       double dV ;
-      double *averDens, *averPU, *dens, *pU ;
+      double *averDens, *dens ;
+      double *averPULJ, *averPUQQ, *averPULJc;
+      double *pULJ, *pUQQ, *pULJc;
+      double pK;
 /*
  *    densities for different molecules 
  */
@@ -124,7 +143,7 @@
 /*
  *    increment, temporary variable 
  */
-      double incr;
+      double incr, incrLJ, incrQQ, incrLJc;
 /*
  *    pair pointers for loop   
  */
@@ -141,11 +160,15 @@
       double mi, qi, qj ;
       double r, r2 ;
       double chord2 ;
-      double cxi, cyi, czi, rci2, rci, rciInv ;
-      double cxj, cyj, czj, rcj2, rcj, rcjInv ;
-      double cxij, cyij, czij, cij2, cij, cijInv ; 
-      double rxij, ryij, rzij, rij2, rij, rijInv ;
-      double rij6, rij12, ffij, fxij, fyij, fzij, fij ;
+      double cxi, cyi, czi, rci2, rci ;
+      double cxj, cyj, czj, rcj2, rcj ;
+      double cxij, cyij, czij, cij2, cij ; 
+      double rxij, ryij, rzij, rij2, rij ;
+      double rij6, rij12, fij ;
+      double ffijLJ, ffijQQ, ffijLJc;
+      double fxijLJ, fxijQQ, fxijLJc;
+      double fyijLJ, fyijQQ, fyijLJc;
+      double fzijLJ, fzijQQ, fzijLJc;
 /*
  *    variables for interception calculation   
  */
@@ -252,7 +275,7 @@
  *    read Lennard-Jones C6 and C12 coefficients
  */
       fgets( line, sizeof( line ), file_par );
-      sscanf( line, "%s%d%d", tmp, &nLJCoefs, &nTypes );
+      sscanf( line, "%s%d%d", tmp, &nLJcoefs, &nTypes );
       LJ_C6  = malloc(nTypes * sizeof(double *));
       LJ_C12 = malloc(nTypes * sizeof(double *));
       for ( iType=0; iType<nTypes; iType++ )
@@ -397,18 +420,22 @@
       }
 
       averDens  = malloc( sizeof( double ) * maxBin );
-      averPU    = malloc( sizeof( double ) * maxBin );
-      if ( NULL==averDens || NULL==averPU ) 
+      averPULJ  = malloc( sizeof( double ) * maxBin );
+      averPUQQ  = malloc( sizeof( double ) * maxBin );
+      averPULJc = malloc( sizeof( double ) * maxBin );
+      if ( NULL==averDens || NULL==averPULJ || NULL==averPUQQ || NULL==averPULJc ) 
       {
-         printf ("Unable to allocate arrays: averDens, averPU!\n");
+         printf ("Unable to allocate arrays: averDens, averPULJ, averPUQQ, averPULJc!\n");
          exit(1);
       }
 
       dens  = malloc( sizeof( double ) * maxBin );
-      pU    = malloc( sizeof( double ) * maxBin );
-      if ( NULL==dens || NULL==pU ) 
+      pULJ  = malloc( sizeof( double ) * maxBin );
+      pUQQ  = malloc( sizeof( double ) * maxBin );
+      pULJc = malloc( sizeof( double ) * maxBin );
+      if ( NULL==dens || NULL==pULJ || NULL==pUQQ || NULL==pULJc ) 
       {
-         printf ("Unable to allocate arrays: dens, pU!\n");
+         printf ("Unable to allocate arrays: dens, pULJ, pUQQ, pULJc!\n");
          exit(1);
       }
 
@@ -444,7 +471,9 @@
       for ( bin=0; bin<maxBin; bin++ ) 
       {
          averDens[bin]  = 0.0;
-         averPU[bin]  = 0.0;
+         averPULJ[bin]  = 0.0;
+         averPUQQ[bin]  = 0.0;
+         averPULJc[bin] = 0.0;
          for ( mol=0; mol<molTypes; mol++ ) 
          {
             molDens[bin][mol] = 0.0;
@@ -527,7 +556,9 @@
          for ( bin=0; bin<maxBin; bin++ ) 
          {
             dens[bin] = 0.0;
-            pU[bin] = 0.0;
+            pULJ[bin] = 0.0;
+            pUQQ[bin] = 0.0;
+            pULJc[bin]= 0.0;
          }
 /*
  *       generate density profile   
@@ -614,12 +645,28 @@
             czij = cz[jm] - cz[im];
             cij2 = cxij*cxij + cyij*cyij + czij*czij;
             cij  = sqrt( cij2 );
+
+
+/*        Use PBC to comput forces ??? */
+
+
+
+
 /*
- *          calculate forces between iw and jw  
+ *          calculate forces between im and jm
  */
-            fxij = 0.0;
-            fyij = 0.0;
-            fzij = 0.0;
+            fxijLJ = 0.0;
+            fyijLJ = 0.0;
+            fzijLJ = 0.0;
+
+            fxijQQ = 0.0;
+            fyijQQ = 0.0;
+            fzijQQ = 0.0;
+
+            fxijLJc = 0.0;
+            fyijLJc = 0.0;
+            fzijLJc = 0.0;
+
 /*
  *          determine the upper and lower boundary of i and j   
  */
@@ -675,9 +722,17 @@
                   rij6 = rij2 * rij2 * rij2 ;
                   rij12 = rij6 * rij6;
                   fij = ( c12*2.0/rij12 - c6/rij6 ) * 6.0/rij2;
-                  fxij = fxij + fij * rxij;
-                  fyij = fyij + fij * ryij;
-                  fzij = fzij + fij * rzij;
+                  fxijLJ = fxijLJ + fij * rxij;
+                  fyijLJ = fyijLJ + fij * ryij;
+                  fzijLJ = fzijLJ + fij * rzij;
+
+                  if ( rij <= rCut )
+                  {
+                     fxijLJc = fxijLJc + fij * rxij;
+                     fyijLJc = fyijLJc + fij * ryij;
+                     fzijLJc = fzijLJc + fij * rzij;
+                  }
+
                }
 /*
  *             Coulomb forces   
@@ -685,10 +740,9 @@
                if ( qi!=0.0 && qj!=0.0 )
                {
                   fij  = fQQ * qi * qj / ( rij2 * rij );
-            //      fij  = fQQ * qi * qj / rij2 * rijInv;
-                  fxij = fxij + fij * rxij;
-                  fyij = fyij + fij * ryij;
-                  fzij = fzij + fij * rzij;
+                  fxijQQ = fxijQQ + fij * rxij;
+                  fyijQQ = fyijQQ + fij * ryij;
+                  fzijQQ = fzijQQ + fij * rzij;
                }
 /*
  *          end of loops (i and j)   
@@ -700,14 +754,14 @@
  *          ffij > 0 :  repulsive force  
  *          ffij < 0 :  attractive force 
  */
-            ffij = ( fxij*cxij + fyij*cyij + fzij*czij ) / cij;
-       //     ffij = ( fxij*cxij + fyij*cyij + fzij*czij ) * cijInv;
+            ffijLJ = ( fxijLJ*cxij + fyijLJ*cyij + fzijLJ*czij ) / cij;
+            ffijQQ = ( fxijQQ*cxij + fyijQQ*cyij + fzijQQ*czij ) / cij;
+            ffijLJc = ( fxijLJc*cxij + fyijLJc*cyij + fzijLJc*czij ) / cij;
 
 /*
  *          determine rmin, rmax, bmin, bmax   
  */
             cos_i = (rci2+cij2-rcj2)/(rci*cij*2.0);
-      //      cos_i = (rci2+cij2-rcj2) * rciInv * cijInv * 0.5f;
             if ( fabs(cos_i)>1.0 ) 
             {
                printf ("Error: cos_i<-1 or cos_i>1!\ncos_i = %f\n",cos_i);
@@ -774,9 +828,17 @@
  */
                if ( inters != 0 )
                {
-                  incr = ffij*cosine*inters/(4.0*pi*r2);
-                  pU[bin] += incr;
-                  averPU[bin] += incr;
+                  incrLJ = ffijLJ*cosine*inters/(4.0*pi*r2);
+                  incrQQ = ffijQQ*cosine*inters/(4.0*pi*r2);
+                  incrLJc = ffijLJc*cosine*inters/(4.0*pi*r2);
+
+                  pULJ[bin] += incrLJ;
+                  pUQQ[bin] += incrQQ;
+                  pULJc[bin] += incrLJc;
+
+                  averPULJ[bin] += incrLJ;
+                  averPUQQ[bin] += incrQQ;
+                  averPULJc[bin] += incrLJc;
                }
 /*
  *          end of loop (bin)   
@@ -789,14 +851,18 @@
 /*
  *       calculate work of formation  
  */
-         work = 0.0;
+         workFull = 0.0;
+         workCut = 0.0;
          for ( bin=0; bin<maxBin; bin++ ) 
          {
             r = ( (double)(bin) + 0.5 ) * dR;
-            work += ( ( kB*nA*temperature*dens[bin] + pU[bin] ) * r*r ) * dR;
+            pK = kB*nA*temperature*averDens[bin];
+            workFull += ( ( pK + pULJ[bin] + pUQQ[bin] ) * r*r ) * dR;
+            workCut += ( ( pK + pULJc[bin] + pUQQ[bin] ) * r*r ) * dR;
          }
-         work *= pi*2.0 ;
-         printf ( "%8d%20.10f\n", frame, work );
+         workFull *= pi*2.0 ;
+         workCut *= pi*2.0;
+         printf ( "%8d%20.10f%20.10f\n", frame, workFull, workCut );
 /*
  *    end of loop (frame)   
  */
@@ -813,7 +879,9 @@
       for (bin=0; bin<maxBin; bin++) 
       {
          averDens[bin]  /= (nFrames-nStart);
-         averPU[bin]    /= (nFrames-nStart);
+         averPULJ[bin]  /= (nFrames-nStart);
+         averPUQQ[bin]  /= (nFrames-nStart);
+         averPULJc[bin] /= (nFrames-nStart);
          for ( mol=0; mol<molTypes; mol++ ) 
          {
             molDens[bin][mol] /= (nFrames-nStart);
@@ -824,13 +892,19 @@
 /*
  *    write results
  */
-      printf ( "%s\n", "#Radius Pressure_K Pressure_U Pressure_N" );
+      printf ( "%s\n", "#Radius  P_N_full  P_N_cut  P_K  P_U_LJ  P_U_QQ  P_U_LJc" );
       for ( bin=0; bin<maxBin; bin++ ) 
       {
          r = ( (double)(bin) + 0.5 ) * dR;
-         printf ( "%8.3f%20.10f%20.10f%20.10f\n", r, 
-                  kB*nA*temperature*averDens[bin], averPU[bin],
-                  kB*nA*temperature*averDens[bin] + averPU[bin] );
+         pK = kB*nA*temperature*averDens[bin];
+         printf ( "%8.3f%15.6f%15.6f%15.6f%15.6f%15.6f%15.6f\n", 
+                  r, 
+                  pK + averPULJ[bin] + averPUQQ[bin],
+                  pK + averPULJc[bin] + averPUQQ[bin],
+                  pK, 
+                  averPULJ[bin],
+                  averPUQQ[bin],
+                  averPULJc[bin] );
       }
 /*
  *    write molecular densities
@@ -881,8 +955,15 @@
       free( cy );
       free( cz );
 
+      free( dens  );
+      free( pULJ  );
+      free( pUQQ  );
+      free( pULJc );
+
       free( averDens  );
-      free( averPU  );
+      free( averPULJ  );
+      free( averPUQQ  );
+      free( averPULJc );
 
       for ( bin=0; bin<maxBin; bin++ ) 
       {

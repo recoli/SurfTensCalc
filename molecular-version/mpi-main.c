@@ -38,12 +38,14 @@
 /*
  *    There should be 3 arguments: nFrames, nStart, temperature
  */
-      if ( argc != 4 )
+      if ( argc != 6 )
       {
-         printf("%s\n", "Incorrect number of arguments (should be 3)!");
+         printf("%s\n", "Incorrect number of arguments (should be 5)!");
          printf("%s\n", "1st argument: nFrame");
          printf("%s\n", "2nd argument: nStart");
          printf("%s\n", "3rd argument: temperature (in Kelvin)");
+         printf("%s\n", "4th argument: cutoff radius (in nm)");
+         printf("%s\n", "5th argument: approx. box size (in nm)");
          exit(1);
       }
       
@@ -53,6 +55,13 @@
       
       double temperature;
       temperature = atof(argv[3]); /* K */
+
+      double rCut;
+      rCut = atof(argv[4]); /* nm */
+
+      double boxSize;
+      boxSize = atof(argv[5]); /* nm */
+
 /*
  *    Define variables
  */
@@ -79,28 +88,39 @@
  */
       if ( iproc == master )
       {
-         printf ( "*****************************************************\n" );
-         printf ( "*  C program to compute surface tension of droplet  *\n" );
-         printf ( "*                   by  Xin Li                      *\n" );
-         printf ( "*         TheoChem, KTH, Stockholm, Sweden          *\n" );
-         printf ( "*****************************************************\n" );
+         printf ( "***************************************************************\n" );
+         printf ( "*  C program to compute surface tension of spherical droplet  *\n" );
+         printf ( "*                        by  Xin Li                           *\n" );
+         printf ( "*         TheoChem & Biology, KTH, Stockholm, Sweden          *\n" );
+         printf ( "***************************************************************\n" );
 
-         printf ( "\n                     Version 1.4                     \n" );
+         printf ( "\n                     Version 1.5                     \n" );
 
          printf ( "\nNote:\n" );
-         printf ( "a) This program assumes that the droplet is centered\n" );
-         printf ( "   in the box during the simulation trajectory.\n" );
-         printf ( "b) This program is valid only when the vapor pressure\n" );
-         printf ( "   is very low.\n" );
-         printf ( "c) All pairwise intermolecular forces within the box\n" );
+         printf ( "a) This program assumes that the droplet is centered in the box\n" );
+         printf ( "   during the simulation trajectory.\n" );
+         printf ( "b) All electrostatic pairwise intermolecular forces within the box\n" );
          printf ( "   are taken into account.\n" );
+         printf ( "c) Lennard-Jones interactions are treated in two ways, i.e. with and\n" );
+         printf ( "   without cutoff radius, so that the magnitude of dispersion correction\n" );
+         printf ( "   can be evaluated.\n" );
 
          printf ( "\nPlease cite the following papers:\n" );
-         printf ( "1) Thompson, et al., J. Chem. Phys., 1984, 81, 530-542.\n" );
-         printf ( "2) Brodskaya, et al., J. Colloid Interface Sci., 1996,\n" );
-         printf ( "   180, 86-97.\n" );
-         printf ( "3) Li, et al., J. Phys. Chem. Lett. 2010, 1, 769-773.\n" );
-         printf ( "4) Li, et al., Atmos. Chem. Phys., 2011, 11, 519-527.\n" );
+         printf ( "1) Thompson, S. M.; Gubbins, K. E.; Walton, J. P. R. B.; Chantry,\n" );
+         printf ( "   R. A. R. and Rowlinson, J. S.: A molecular dynamics study of\n" );
+         printf ( "   liquid drops, J. Chem. Phys., 81, 530-542, 1984.\n" );
+         printf ( "2) McGraw, R. and Laaksonen, A.: Scaling properties of the critical\n" );
+         printf ( "   nucleus in classical and molecular-based theories of vapor-liquid\n" );
+         printf ( "   nucleation, Phys. Rev. Lett., 76, 2754-2757, 1996.\n" );
+         printf ( "3) Li, X.; Hede, T.; Tu, Y.; Leck, C. and Agren, H.: Surface-active\n" );
+         printf ( "   cis-pinonic acid in atmospheric droplets: A molecular dynamics\n" );
+         printf ( "   study, J. Phys. Chem. Lett., 1, 769-773, 2010.\n" );
+         printf ( "4) Li, X.; Hede, T.; Tu, Y.; Leck, C. and Agren, H.: Glycine in aerosol\n" );
+         printf ( "   water droplets: a critical assessment of Kohler theory by predicting\n" );
+         printf ( "   surface tension from molecular dynamics simulations, Atmos. Chem. Phys.,\n" );
+         printf ( "   11, 519-527, 2011.\n" );
+         printf ( "5) Corti, D. S.; Kerr, K. J. and Torabi, K.: On the interfacial thermodynamics\n" );
+         printf ( "   of nanoscale droplets and bubbles, J. Chem. Phys., 135, 024701, 2011.\n" );
 
          start_t = time(NULL);
          printf ( "\nStep I: MPI execution\n" );
@@ -123,10 +143,12 @@
 /*
  *    Run ./serial_calc_pres_dens.x on each processor
  */
-      sprintf ( command, "./serial_calc_pres_dens.x %d %d %f > data-%s.log", 
+      sprintf ( command, "./serial_calc_pres_dens.x %d %d %f %f %f > data-%s.log", 
                          nStart+(nFrames-nStart)/numprocs*(iproc+1), 
                          nStart+(nFrames-nStart)/numprocs*iproc, 
                          temperature, 
+                         rCut,
+                         boxSize,
                          filename );
       system ( command );
 /*
