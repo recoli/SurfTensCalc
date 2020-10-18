@@ -1,7 +1,7 @@
 # SurfTensCalc
 An old code that calculates surface tension of a spherical water droplet.
 
-Requires the XTC Library
+Requires the xdrfile Library
 http://www.gromacs.org/Downloads_of_outdated_releases
 
 Usage:
