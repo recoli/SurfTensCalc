@@ -670,13 +670,13 @@
                printf ("Error: bMax<0!\nrMax = %f, bMax = %d",rMax,bMax);
                exit(1);
             }
-            bMin = (bMin>=maxBin)?maxBin:bMin;
-            bMax = (bMax>=maxBin)?maxBin:bMax;
+            bMin = (bMin>=maxBin-1)?(maxBin-1):bMin;
+            bMax = (bMax>=maxBin-1)?(maxBin-1):bMax;
 
 /*
  *          start of loop (bin)   
  */
-            for (bin=bMin; bin<bMax; bin++) 
+            for (bin=bMin; bin<=bMax; bin++)
             {
                r  = ( (double)(bin) + 0.5 ) * dR;
                r2 = r*r;
