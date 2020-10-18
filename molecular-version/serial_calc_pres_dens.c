@@ -689,7 +689,7 @@
                } 
                else if ( rci>=r && rcj>=r ) 
                {
-                  inters = 2;
+                  inters = (h2==r2)?1:2;
                } 
                else 
                {
