@@ -26,7 +26,7 @@
    #include <math.h>
    #include <stdio.h>
    #include <stdlib.h>
-   #include <xdrfile_xtc.h>
+   #include <xdrfile/xdrfile_xtc.h>
 
 /********************************************************************
  *    Main program                                                  *
