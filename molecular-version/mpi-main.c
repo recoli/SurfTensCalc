@@ -38,14 +38,12 @@
 /*
  *    There should be 3 arguments: nFrames, nStart, temperature
  */
-      if ( argc != 6 )
+      if ( argc != 4 )
       {
-         printf("%s\n", "Incorrect number of arguments (should be 5)!");
+         printf("%s\n", "Incorrect number of arguments (should be 3)!");
          printf("%s\n", "1st argument: nFrame");
          printf("%s\n", "2nd argument: nStart");
          printf("%s\n", "3rd argument: temperature (in Kelvin)");
-         printf("%s\n", "4th argument: cutoff radius (in nm)");
-         printf("%s\n", "5th argument: approx. box size (in nm)");
          exit(1);
       }
       
@@ -55,13 +53,6 @@
       
       double temperature;
       temperature = atof(argv[3]); /* K */
-
-      double rCut;
-      rCut = atof(argv[4]); /* nm */
-
-      double boxSize;
-      boxSize = atof(argv[5]); /* nm */
-
 /*
  *    Define variables
  */
@@ -88,46 +79,18 @@
  */
       if ( iproc == master )
       {
-         printf ( "***************************************************************\n" );
-         printf ( "*  C program to compute surface tension of spherical droplet  *\n" );
-         printf ( "*                        by  Xin Li                           *\n" );
-         printf ( "*         TheoChem & Biology, KTH, Stockholm, Sweden          *\n" );
-         printf ( "***************************************************************\n" );
-
-         printf ( "\n                    Version 2012-01-07                       \n" );
-
-         printf ( "\nNote:\n" );
-         printf ( "a) This program assumes that the droplet is centered in the box\n" );
-         printf ( "   during the simulation trajectory.\n" );
-         printf ( "b) All electrostatic pairwise intermolecular forces within the box\n" );
-         printf ( "   are taken into account.\n" );
-         printf ( "c) Lennard-Jones interactions are treated in two ways, i.e. with and\n" );
-         printf ( "   without cutoff radius, so that the magnitude of dispersion correction\n" );
-         printf ( "   can be evaluated.\n" );
-
-         printf ( "\nPlease cite the following papers:\n" );
-         printf ( "1) Thompson, S. M.; Gubbins, K. E.; Walton, J. P. R. B.; Chantry,\n" );
-         printf ( "   R. A. R. and Rowlinson, J. S.: A molecular dynamics study of\n" );
-         printf ( "   liquid drops, J. Chem. Phys., 81, 530-542, 1984.\n" );
-         printf ( "2) McGraw, R. and Laaksonen, A.: Scaling properties of the critical\n" );
-         printf ( "   nucleus in classical and molecular-based theories of vapor-liquid\n" );
-         printf ( "   nucleation, Phys. Rev. Lett., 76, 2754-2757, 1996.\n" );
-         printf ( "3) Li, X.; Hede, T.; Tu, Y.; Leck, C. and Agren, H.: Surface-active\n" );
-         printf ( "   cis-pinonic acid in atmospheric droplets: A molecular dynamics\n" );
-         printf ( "   study, J. Phys. Chem. Lett., 1, 769-773, 2010.\n" );
-         printf ( "4) Li, X.; Hede, T.; Tu, Y.; Leck, C. and Agren, H.: Glycine in aerosol\n" );
-         printf ( "   water droplets: a critical assessment of Kohler theory by predicting\n" );
-         printf ( "   surface tension from molecular dynamics simulations, Atmos. Chem. Phys.,\n" );
-         printf ( "   11, 519-527, 2011.\n" );
-         printf ( "5) Corti, D. S.; Kerr, K. J. and Torabi, K.: On the interfacial thermodynamics\n" );
-         printf ( "   of nanoscale droplets and bubbles, J. Chem. Phys., 135, 024701, 2011.\n" );
+         printf ( "*****************************************************\n" );
+         printf ( "*  C program to compute surface tension of droplet  *\n" );
+         printf ( "*           Xin Li, TheoChem & Biology, KTH         *\n" );
+         printf ( "*               KTH, Stockholm, Sweden              *\n" );
+         printf ( "*****************************************************\n" );
 
          start_t = time(NULL);
          printf ( "\nStep I: MPI execution\n" );
-         printf ( "   %d frames will be read from the trajectory file.\n", nFrames );
-         printf ( "   Only the last %d frames will be used in calculation.\n", nFrames-nStart );
+         printf ( "   There are %d frames; only the last %d frames will be used.\n", nFrames, nFrames-nStart );
          printf ( "   The temperature is %8.2f K\n", temperature );
          printf ( "<> Checking input files...\n" );
+         fflush(stdout);
 
          system ( "./check_input.x > check_input.log" );
          system ( "cat check_input.log" );
@@ -135,6 +98,7 @@
          printf ( "<> Job started at %s", ctime(&start_t) );
          printf ( "   Number of processors: %d\n", numprocs );
          printf ( "   Running serial_calc_pres_dens.x on each processor...\n" );
+         fflush(stdout);
       }
 /*
  *    convert rank to filename
@@ -143,12 +107,10 @@
 /*
  *    Run ./serial_calc_pres_dens.x on each processor
  */
-      sprintf ( command, "./serial_calc_pres_dens.x %d %d %f %f %f > data-%s.log", 
+      sprintf ( command, "./serial_calc_pres_dens.x %d %d %f > data-%s.log", 
                          nStart+(nFrames-nStart)/numprocs*(iproc+1), 
                          nStart+(nFrames-nStart)/numprocs*iproc, 
                          temperature, 
-                         rCut,
-                         boxSize,
                          filename );
       system ( command );
 /*
@@ -160,32 +122,27 @@
  */
       if ( iproc == master )
       {
+         printf ( "\nStep II: Processing data\n" );
+         fflush(stdout);
+/*
+ *       Run ./serial_process_data.x on master processor
+ */ 
+         sprintf ( command, "./serial_process_data.x %d %f > surftens.dat", 
+                            numprocs, temperature );
+         system ( command );
+         system ( "cat surftens.dat" );
+
          end_t = time(NULL);
-         printf ( "   Job ended at %s", ctime(&end_t) );
+         printf ( "\n<> Job ended at %s", ctime(&end_t) );
 
          delta_time = (int)(difftime(end_t,start_t));
          delta_hour = delta_time / 3600;
          delta_minute = (delta_time - delta_hour*3600) / 60;
          delta_second = delta_time - delta_hour*3600 - delta_minute*60;
-         printf ( "   The calculation used %d hours %d minutes %d seconds.\n", 
+         printf ( "The calculation used %d hours %d minutes %d seconds.\n", 
                   delta_hour, delta_minute, delta_second );
+         fflush(stdout);
       }
-
-/*
- *    Commented; run ./serial_process_data.x manually
-
-      if ( iproc == master )
-      {
-         printf ( "\nStep II: Processing data\n" );
-         sprintf ( command, "./serial_process_data.x %d > surftens.dat", numprocs );
-         system ( command );
-         system ( "cat surftens.dat" );
-
-         printf ( "\nEnd of program\n" );
-
-      }
-
- */ 
 
       return 0;
 

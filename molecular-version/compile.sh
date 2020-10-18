@@ -6,5 +6,3 @@
   gcc -O2 -o serial_calc_pres_dens.x serial_calc_pres_dens.c -I./xdrfile -L./xdrfile -lxdrfile
   gcc -O2 -o serial_process_data.x serial_process_data.c
   gcc -O2 -o fit_dens.x fit_dens.c
-  gcc -O2 -o fit_pN.x fit_pN.c
-
