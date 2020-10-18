@@ -21,7 +21,7 @@
 /********************************************************************
  *    Serial C program to compute surface tension of droplet        *
  *    by Xin Li, TheoChem & Biology, KTH, Stockholm, Sweden         *
- *              Version  1.6-test, 2012-01-07                       *
+ *                      Version 2012-01-07                          *
  ********************************************************************/
 
    #include <math.h>

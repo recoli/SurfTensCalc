@@ -94,7 +94,7 @@
          printf ( "*         TheoChem & Biology, KTH, Stockholm, Sweden          *\n" );
          printf ( "***************************************************************\n" );
 
-         printf ( "\n                Version 1.6, 2012-01-07                      \n" );
+         printf ( "\n                    Version 2012-01-07                       \n" );
 
          printf ( "\nNote:\n" );
          printf ( "a) This program assumes that the droplet is centered in the box\n" );
