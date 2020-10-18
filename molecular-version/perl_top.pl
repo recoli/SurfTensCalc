@@ -20,32 +20,49 @@
 
 #!/usr/bin/perl
 
-    die unless @ARGV==4;
-    $nFrames = $ARGV[0];
-    $nStart  = $ARGV[1];
-    $filenameXTC = $ARGV[2];
-    $filenameTOP = $ARGV[3];
+    use warnings;
+
+    printf "\n";
+    printf "***************************************************************\n";
+    printf "*      Perl script to convert gmx top file to param.txt       *\n";
+    printf "*                        by  Xin Li                           *\n";
+    printf "*         TheoChem & Biology, KTH, Stockholm, Sweden          *\n";
+    printf "***************************************************************\n";
+    printf "\n";
+    printf "Usage: perl perl_top.pl -top [gmx_top_file] -xtc [gmx_xtc_file]\n";
+    printf "\n";
+
+#   options
+#   Note: change array to hash
+    my %options = @ARGV;
+
+    die "Error: undefined -top option!\n" unless (defined $options{"-top"});
+    my $gmx_top = $options{"-top"};
+    die "Error: cannot find file $gmx_top !\n" unless (-e $gmx_top);
+
+    die "Error: undefined -xtc option!\n" unless (defined $options{"-xtc"});
+    my $gmx_xtc = $options{"-xtc"};
+    die "Error: cannot find file $gmx_xtc !\n" unless (-e $gmx_xtc);
+
+    printf "GMX_top_file   $gmx_top\n";
+    printf "GMX_xtc_file   $gmx_xtc\n";
+    printf "\n";
 
 #   open file for writing
     open PAR,">param.txt" or die;
-
-    printf PAR "%-10s%10d\n", "nFrames", $nFrames;
-    printf PAR "%-10s%10d\n", "nStart", $nStart;
-    printf PAR "%-10s%10s\n", "xtc", $filenameXTC;
+    printf PAR "%-10s%10s\n", "xtc", $gmx_xtc;
 
 #   read and write molecular information
-    open TOP,"$filenameTOP" or die;
+    open TOP,"$gmx_top" or die;
     $mol = 0;
     while(<TOP>){
       if(/^\[\s*molecules\s*\]/){
         while(<TOP>){
-          if(/^;/ or /^\s*$/){
-            next;
-          }else{
-            $mol++;
-            $molName[$mol] = (split)[0];
-            $molNumber[$mol] = (split)[1];
-          }
+          next if ( /^;/ or /^\#/ or /^\s*$/ );
+          last if( /^\[/ );
+          $mol++;
+          $molName[$mol] = (split)[0];
+          $molNumber[$mol] = (split)[1];
         }
       }
     }
@@ -57,7 +74,7 @@
     close TOP;
 
 #   read and write atomic information
-    open TOP,"$filenameTOP" or die;
+    open TOP,"$gmx_top" or die;
 #   initialize number of types and number of molecules
     $nTypes = 0;
     $nMols = 0;
@@ -66,7 +83,7 @@
         $nMols++;
         while(<TOP>){
 #         skip comments or blank lines
-          if(/^;/ or /^\s*$/){ 
+          if(/^;/ or /^\#/ or /^\s*$/){
             next; 
 #         do not read next block
           }elsif(/^\[/){ 
@@ -76,9 +93,9 @@
 #           read atom ID, resnr, resname, name, charge, mass
             $atom = (split)[0];
             $nAtoms = $atom;
-            $atomResNr[$atom]   = (split)[2];
-            $atomResName[$atom] = (split)[3];
-            $atomName[$atom]    = (split)[4];
+            # $atomResNr[$atom]   = (split)[2];
+            # $atomResName[$atom] = (split)[3];
+            # $atomName[$atom]    = (split)[4];
             $atomCharge[$atom]  = (split)[6];
             $atomMass[$atom]    = (split)[7];
 #           check if this type is a new type 
@@ -97,9 +114,11 @@
               $typeName[$nTypes] = (split)[1];
               open ITP,"ffnonbonded.itp" or die;
               while (<ITP>) {
-                if (/^\s*$typeName[$nTypes]\s+/) {
-                  $typeSigma[$nTypes] = (split)[6];
-                  $typeEpsilon[$nTypes] = (split)[7];
+                $_ = (split ";",$_)[0];
+                @_ = (split);
+                if ( /^\s*$typeName[$nTypes]\s+/ ) {
+                  $typeSigma[$nTypes] = $_[@_-2];
+                  $typeEpsilon[$nTypes] = $_[@_-1];
                 }
               }
               close ITP;
@@ -121,7 +140,7 @@
 
 #   check if spce.itp is included
     $spce = 0;
-    open TOP,"$filenameTOP" or die;
+    open TOP,"$gmx_top" or die;
     while(<TOP>){
       if(/^\#include\s+\".*?spce\.itp\"/){ $spce = 1; }
     }

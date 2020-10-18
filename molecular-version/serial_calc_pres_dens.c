@@ -171,12 +171,8 @@
       }
       mol = 0;
 /*
- *    read number of frames
+ *    check number of frames
  */
-      fgets( line, sizeof( line ), file_par );
-      /*sscanf( line, "%s%d", tmp, &nFrames );*/
-      fgets( line, sizeof( line ), file_par );
-      /*sscanf( line, "%s%d", tmp, &nStart );*/
       if ( nFrames<=nStart ) 
       {
          printf( "Error: nFrames is no larger than nStart!\n" ) ;

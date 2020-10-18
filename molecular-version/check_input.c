@@ -118,11 +118,6 @@
       }
       mol = 0;
 /*
- *    read comments (two lines)
- */
-      fgets( line, sizeof( line ), file_par );
-      fgets( line, sizeof( line ), file_par );
-/*
  *    read name of xtc file
  */
       fgets( line, sizeof( line ), file_par );
