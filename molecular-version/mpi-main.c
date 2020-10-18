@@ -85,6 +85,11 @@
          printf ( "*               KTH, Stockholm, Sweden              *\n" );
          printf ( "*****************************************************\n" );
 
+         printf ( "\nThis program is based on the following papers:\n" );
+         printf ( "   Thompson, et al., J. Chem. Phys., 1984, 81, 530-542.\n" );
+         printf ( "   Brodskaya, et al., J. Colloid Interface Sci., 1996, 180, 86-97.\n" );
+         printf ( "   Li, et al., J. Phys. Chem. Lett. 2010, 1, 769-773.\n" );
+
          start_t = time(NULL);
          printf ( "\nStep I: MPI execution\n" );
          printf ( "   There are %d frames; only the last %d frames will be used.\n", nFrames, nFrames-nStart );
